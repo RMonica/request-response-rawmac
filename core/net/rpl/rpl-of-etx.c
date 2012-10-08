@@ -87,8 +87,18 @@ rpl_of_t rpl_of_etx = {
  */
 #define PARENT_SWITCH_THRESHOLD_DIV	2
 
+
+/*
+ * The path metric must differ more than 1/AVG_DELAY_PRECISION seconds
+ * in order to switch preferred parent.
+ *
+ * All the path metrics represented in clock ticks will be shifted right by AVG_DELAY_SHIFTBITS
+ * to increase the maximum path metric that can be represented with only 2 bytes.
+ */
+#define AVG_DELAY_PRECISION 200
+#define AVG_DELAY_SHIFTBITS 4
+#define AVG_DELAY_SWITCH_THRESHOLD ((RTIMER_ARCH_SECOND / AVG_DELAY_PRECISION) >> AVG_DELAY_SHIFTBITS)
 #define AVG_DELAY_MAX_DELAY 65535
-#define AVG_DELAY_SWITCH_THRESHOLD (RTIMER_ARCH_SECOND / 3000)
 
 typedef uint16_t rpl_path_metric_t;
 
@@ -109,7 +119,7 @@ calculate_path_metric(rpl_parent_t *p)
   } else {
     rimeaddr_t macaddr;
     uip_ds6_get_addr_iid(&(p->addr),(uip_lladdr_t *)&macaddr);
-    long delay = contikimac_get_average_delay_for_routing(&macaddr) >> 4;
+    long delay = contikimac_get_average_delay_for_routing(&macaddr) >> AVG_DELAY_SHIFTBITS;
     //printf("calculate_path_metric: %lu to %u",delay,(int)(macaddr.u8[7]));
 
     delay += p->mc.obj.avg_delay_to_sink;
