@@ -102,8 +102,16 @@ rpl_of_t rpl_of_etx = {
 
 typedef uint16_t rpl_path_metric_t;
 
+/* Modified by RMonica
+ * added the parameter approx_if_higher
+ *
+ * approx_if_higher: if it is determined that the returned value would be higher
+ *   than approx_if_higher, this function may return an approximated value
+ *   that will be still higher than approx_if_higher.
+ *   Set to AVG_DELAY_MAX_DELAY to disable approximations.
+ */
 static rpl_path_metric_t
-calculate_path_metric(rpl_parent_t *p)
+calculate_path_metric(rpl_parent_t *p, rpl_path_metric_t approx_if_higher)
 {
 #if (RPL_DAG_MC == RPL_DAG_MC_ETX) || (RPL_DAG_MC == RPL_DAG_MC_ENERGY)
   if(p == NULL || (p->mc.obj.etx == 0 && p->rank > ROOT_RANK(p->dag->instance))) {
@@ -119,11 +127,14 @@ calculate_path_metric(rpl_parent_t *p)
   } else {
     rimeaddr_t macaddr;
     uip_ds6_get_addr_iid(&(p->addr),(uip_lladdr_t *)&macaddr);
-    long delay = contikimac_get_average_delay_for_routing(&macaddr) >> AVG_DELAY_SHIFTBITS;
-    //printf("calculate_path_metric: %lu to %u",delay,(int)(macaddr.u8[7]));
 
-    delay += p->mc.obj.avg_delay_to_sink;
-    //printf(" total: %lu\n",delay);
+    rtimer_cycle_time_t mft = contikimac_get_MFT_for_routing() >> AVG_DELAY_SHIFTBITS;
+    long delay = p->mc.obj.avg_delay_to_sink;
+    // if the delay is higher than approx_if_higher - mft, approximate
+    delay += ((long)mft + delay <= (long)approx_if_higher) ?
+      (contikimac_get_average_delay_for_routing(&macaddr) >> AVG_DELAY_SHIFTBITS)
+      : (mft + 1);
+
     if (delay > AVG_DELAY_MAX_DELAY) {
       delay = AVG_DELAY_MAX_DELAY;
     }
@@ -202,6 +213,7 @@ best_parent(rpl_parent_t *p1, rpl_parent_t *p2)
   rpl_path_metric_t min_diff;
   rpl_path_metric_t p1_metric;
   rpl_path_metric_t p2_metric;
+  rpl_path_metric_t approx_if_higher = AVG_DELAY_MAX_DELAY;
 
   dag = p1->dag; /* Both parents must be in the same DAG. */
 
@@ -214,8 +226,18 @@ best_parent(rpl_parent_t *p1, rpl_parent_t *p2)
 #error "best_parent: RPL_DAG_MC not supported."
 #endif
 
-  p1_metric = calculate_path_metric(p1);
-  p2_metric = calculate_path_metric(p2);
+  /* if this node already has a parent, approximate all metrics
+   * higher than the metric of the parent
+   */
+  if (dag->preferred_parent) {
+    approx_if_higher = calculate_path_metric(dag->preferred_parent, AVG_DELAY_MAX_DELAY);
+  }
+
+  // if p1 or p2 is the parent, do not recalculate
+  p1_metric = (dag->preferred_parent && p1 == dag->preferred_parent) ?
+    approx_if_higher : calculate_path_metric(p1, approx_if_higher);
+  p2_metric = (dag->preferred_parent && p2 == dag->preferred_parent) ?
+    approx_if_higher : calculate_path_metric(p2, approx_if_higher);
 
   /* Maintain stability of the preferred parent in case of similar ranks. */
   if(p1 == dag->preferred_parent || p2 == dag->preferred_parent) {
@@ -257,7 +279,7 @@ update_metric_container(rpl_instance_t *instance)
   if(dag->rank == ROOT_RANK(instance)) {
     path_metric = 0;
   } else {
-    path_metric = calculate_path_metric(dag->preferred_parent);
+    path_metric = calculate_path_metric(dag->preferred_parent, AVG_DELAY_MAX_DELAY);
   }
 
 #if RPL_DAG_MC == RPL_DAG_MC_ETX

@@ -969,6 +969,14 @@ rtimer_cycle_time_t contikimac_get_cycle_time_for_routing()
     return 0; // 0 means "radio always on"
   return CYCLE_TIME;
 }
+/* Function added by RMonica
+ * get Minimum Forwarding Time: the minimum time needed to forward a packet
+ */
+/*---------------------------------------------------------------------------*/
+rtimer_cycle_time_t contikimac_get_MFT_for_routing()
+{
+  return 2 * GUARD_TIME;
+}
 /*---------------------------------------------------------------------------*/
 /* Function added by RMonica
  * get average communication delay (due to duty cycle) towards node "toNode"
