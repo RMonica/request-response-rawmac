@@ -45,6 +45,8 @@
 #include "net/uip-ds6.h"
 #include "sys/ctimer.h"
 
+#include "net/netstack.h"
+
 /*---------------------------------------------------------------------------*/
 /* The amount of parents that this node has in a particular DAG. */
 #define RPL_PARENT_COUNT(dag)   list_length((dag)->parents)
@@ -62,6 +64,8 @@ typedef uint16_t rpl_ocp_t;
 #define RPL_DAG_MC_LQL                  6 /* Link Quality Level */
 #define RPL_DAG_MC_ETX                  7 /* Expected Transmission Count */
 #define RPL_DAG_MC_LC                   8 /* Link Color */
+
+#define RPL_DAG_MC_AVG_DELAY            9 /* Average delay towards sink */
 
 /* DAG Metric Container flags. */
 #define RPL_DAG_MC_FLAG_P               0x8
@@ -97,9 +101,13 @@ struct rpl_metric_container {
   uint8_t aggr;
   uint8_t prec;
   uint8_t length;
+  /* field added by RMonica */
+  uint16_t node_cycle_time;
   union metric_object {
     struct rpl_metric_object_energy energy;
     uint16_t etx;
+    /* field added by RMonica */
+    uint16_t avg_delay_to_sink;
   } obj;
 };
 typedef struct rpl_metric_container rpl_metric_container_t;

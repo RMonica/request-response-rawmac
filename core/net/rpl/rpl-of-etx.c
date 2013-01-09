@@ -43,6 +43,15 @@
  * \author Joakim Eriksson <joakime@sics.se>, Nicolas Tsiftes <nvt@sics.se>
  */
 
+/* Modified by RMonica
+ *
+ * patches: - different nodes may have different cycle times
+ *            (only for the addition of one line to update_metric_container,
+ *            to broadcast the cycle time)
+ *          - add RPL function RPL_DAG_MC_AVG_DELAY
+ *            (search for RPL_DAG_MC_AVG_DELAY to see modifications)
+ */
+
 #include "net/rpl/rpl-private.h"
 #include "net/neighbor-info.h"
 
@@ -78,11 +87,33 @@ rpl_of_t rpl_of_etx = {
  */
 #define PARENT_SWITCH_THRESHOLD_DIV	2
 
+
+/*
+ * The path metric must differ more than 1/AVG_DELAY_PRECISION seconds
+ * in order to switch preferred parent.
+ *
+ * All the path metrics represented in clock ticks will be shifted right by AVG_DELAY_SHIFTBITS
+ * to increase the maximum path metric that can be represented with only 2 bytes.
+ */
+#define AVG_DELAY_PRECISION 200
+#define AVG_DELAY_SHIFTBITS 4
+#define AVG_DELAY_SWITCH_THRESHOLD ((RTIMER_ARCH_SECOND / AVG_DELAY_PRECISION) >> AVG_DELAY_SHIFTBITS)
+#define AVG_DELAY_MAX_DELAY 65535
+
 typedef uint16_t rpl_path_metric_t;
 
+/* Modified by RMonica
+ * added the parameter approx_if_higher
+ *
+ * approx_if_higher: if it is determined that the returned value would be higher
+ *   than approx_if_higher, this function may return an approximated value
+ *   that will be still higher than approx_if_higher.
+ *   Set to AVG_DELAY_MAX_DELAY to disable approximations.
+ */
 static rpl_path_metric_t
-calculate_path_metric(rpl_parent_t *p)
+calculate_path_metric(rpl_parent_t *p, rpl_path_metric_t approx_if_higher)
 {
+#if (RPL_DAG_MC == RPL_DAG_MC_ETX) || (RPL_DAG_MC == RPL_DAG_MC_ENERGY)
   if(p == NULL || (p->mc.obj.etx == 0 && p->rank > ROOT_RANK(p->dag->instance))) {
     return MAX_PATH_COST * RPL_DAG_MC_ETX_DIVISOR;
   } else {
@@ -90,6 +121,28 @@ calculate_path_metric(rpl_parent_t *p)
     etx = (etx * RPL_DAG_MC_ETX_DIVISOR) / NEIGHBOR_INFO_ETX_DIVISOR;
     return p->mc.obj.etx + (uint16_t) etx;
   }
+#elif RPL_DAG_MC == RPL_DAG_MC_AVG_DELAY
+  if(p == NULL || (p->mc.obj.avg_delay_to_sink == 0 && p->rank > ROOT_RANK(p->dag->instance))) {
+    return AVG_DELAY_MAX_DELAY;
+  } else {
+    rimeaddr_t macaddr;
+    uip_ds6_get_addr_iid(&(p->addr),(uip_lladdr_t *)&macaddr);
+
+    rtimer_cycle_time_t mft = contikimac_get_MFT_for_routing() >> AVG_DELAY_SHIFTBITS;
+    long delay = p->mc.obj.avg_delay_to_sink;
+    // if the delay is higher than approx_if_higher - mft, approximate
+    delay += ((long)mft + delay <= (long)approx_if_higher) ?
+      (contikimac_get_average_delay_for_routing(&macaddr) >> AVG_DELAY_SHIFTBITS)
+      : (mft + 1);
+
+    if (delay > AVG_DELAY_MAX_DELAY) {
+      delay = AVG_DELAY_MAX_DELAY;
+    }
+    return (rpl_path_metric_t)delay;
+  }
+#else
+#error "calculate_path_metric: Not supported."
+#endif
 }
 
 static void
@@ -115,7 +168,13 @@ calculate_rank(rpl_parent_t *p, rpl_rank_t base_rank)
     rank_increase = NEIGHBOR_INFO_FIX2ETX(INITIAL_LINK_METRIC) * RPL_MIN_HOPRANKINC;
   } else {
     /* multiply first, then scale down to avoid truncation effects */
+#if (RPL_DAG_MC == RPL_DAG_MC_ETX) || (RPL_DAG_MC == RPL_DAG_MC_ENERGY)
     rank_increase = NEIGHBOR_INFO_FIX2ETX(p->link_metric * p->dag->instance->min_hoprankinc);
+#elif RPL_DAG_MC == RPL_DAG_MC_AVG_DELAY
+    rank_increase = NEIGHBOR_INFO_FIX2ETX(p->dag->instance->min_hoprankinc);
+#else
+#error "calculate_rank: not supported."
+#endif
     if(base_rank == 0) {
       base_rank = p->rank;
     }
@@ -154,14 +213,31 @@ best_parent(rpl_parent_t *p1, rpl_parent_t *p2)
   rpl_path_metric_t min_diff;
   rpl_path_metric_t p1_metric;
   rpl_path_metric_t p2_metric;
+  rpl_path_metric_t approx_if_higher = AVG_DELAY_MAX_DELAY;
 
   dag = p1->dag; /* Both parents must be in the same DAG. */
 
+#if (RPL_DAG_MC == RPL_DAG_MC_ETX) || (RPL_DAG_MC == RPL_DAG_MC_ENERGY)
   min_diff = RPL_DAG_MC_ETX_DIVISOR /
              PARENT_SWITCH_THRESHOLD_DIV;
+#elif (RPL_DAG_MC == RPL_DAG_MC_AVG_DELAY)
+  min_diff = AVG_DELAY_SWITCH_THRESHOLD;
+#else
+#error "best_parent: RPL_DAG_MC not supported."
+#endif
 
-  p1_metric = calculate_path_metric(p1);
-  p2_metric = calculate_path_metric(p2);
+  /* if this node already has a parent, approximate all metrics
+   * higher than the metric of the parent
+   */
+  if (dag->preferred_parent) {
+    approx_if_higher = calculate_path_metric(dag->preferred_parent, AVG_DELAY_MAX_DELAY);
+  }
+
+  // if p1 or p2 is the parent, do not recalculate
+  p1_metric = (dag->preferred_parent && p1 == dag->preferred_parent) ?
+    approx_if_higher : calculate_path_metric(p1, approx_if_higher);
+  p2_metric = (dag->preferred_parent && p2 == dag->preferred_parent) ?
+    approx_if_higher : calculate_path_metric(p2, approx_if_higher);
 
   /* Maintain stability of the preferred parent in case of similar ranks. */
   if(p1 == dag->preferred_parent || p2 == dag->preferred_parent) {
@@ -190,6 +266,8 @@ update_metric_container(rpl_instance_t *instance)
   instance->mc.flags = RPL_DAG_MC_FLAG_P;
   instance->mc.aggr = RPL_DAG_MC_AGGR_ADDITIVE;
   instance->mc.prec = 0;
+  /* Following line added by RMonica */
+  instance->mc.node_cycle_time = contikimac_get_cycle_time_for_routing();
 
   dag = instance->current_dag;
 
@@ -201,7 +279,7 @@ update_metric_container(rpl_instance_t *instance)
   if(dag->rank == ROOT_RANK(instance)) {
     path_metric = 0;
   } else {
-    path_metric = calculate_path_metric(dag->preferred_parent);
+    path_metric = calculate_path_metric(dag->preferred_parent, AVG_DELAY_MAX_DELAY);
   }
 
 #if RPL_DAG_MC == RPL_DAG_MC_ETX
@@ -227,6 +305,12 @@ update_metric_container(rpl_instance_t *instance)
 
   instance->mc.obj.energy.flags = type << RPL_DAG_MC_ENERGY_TYPE;
   instance->mc.obj.energy.energy_est = path_metric;
+
+#elif RPL_DAG_MC == RPL_DAG_MC_AVG_DELAY
+
+  instance->mc.type = RPL_DAG_MC_AVG_DELAY;
+  instance->mc.length = sizeof(instance->mc.obj.avg_delay_to_sink);
+  instance->mc.obj.avg_delay_to_sink = path_metric;
 
 #else
 

@@ -333,6 +333,9 @@ uip_ds6_aaddr_t *uip_ds6_aaddr_lookup(uip_ipaddr_t *ipaddr);
 /** \brief set the last 64 bits of an IP address based on the MAC address */
 void uip_ds6_set_addr_iid(uip_ipaddr_t *ipaddr, uip_lladdr_t *lladdr);
 
+/** \brief get the MAC address from the IP address (reverse of uip_ds6_set_addr_iid) */
+void uip_ds6_get_addr_iid(uip_ipaddr_t *ipaddr, uip_lladdr_t *lladdr);
+
 /** \brief Get the number of matching bits of two addresses */
 uint8_t get_match_length(uip_ipaddr_t *src, uip_ipaddr_t *dst);
 
