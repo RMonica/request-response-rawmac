@@ -47,6 +47,7 @@
 #include "net/neighbor-info.h"
 
 #define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_PRINT
 #include "net/uip-debug.h"
 
 #include <limits.h>

@@ -52,7 +52,9 @@
 #include <limits.h>
 #include <string.h>
 
-#define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_NONE
+#define DEBUG 2
+//#define DEBUG DEBUG_PRINT
 #include "net/uip-debug.h"
 
 #include "net/neighbor-info.h"
@@ -632,7 +634,7 @@ rpl_select_dag(rpl_instance_t *instance, rpl_parent_t *p)
 
   if(best_dag->preferred_parent != last_parent) {
     rpl_set_default_route(instance, &best_dag->preferred_parent->addr);
-    PRINTF("RPL: Changed preferred parent, rank changed from %u to %u\n",
+    ANNOTATE("RPL: Changed preferred parent, rank changed from %u to %u\n",
   	(unsigned)old_rank, best_dag->rank);
     RPL_STAT(rpl_stats.parent_switch++);
     if(instance->mop != RPL_MOP_NO_DOWNWARD_ROUTES) {
@@ -646,7 +648,7 @@ rpl_select_dag(rpl_instance_t *instance, rpl_parent_t *p)
     }
     rpl_reset_dio_timer(instance);
   } else if(best_dag->rank != old_rank) {
-    PRINTF("RPL: Preferred parent update, rank changed from %u to %u\n",
+    ANNOTATE("RPL: Preferred parent update, rank changed from %u to %u\n",
   	(unsigned)old_rank, best_dag->rank);
   }
   return best_dag;

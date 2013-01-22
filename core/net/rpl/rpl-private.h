@@ -197,7 +197,7 @@
 #define RPL_DAG_MC_ETX_DIVISOR		128
 
 /* DIS related */
-#define RPL_DIS_SEND                    1
+//#define RPL_DIS_SEND                    1
 #ifdef  RPL_DIS_INTERVAL_CONF
 #define RPL_DIS_INTERVAL                RPL_DIS_INTERVAL_CONF
 #else
