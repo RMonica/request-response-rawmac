@@ -171,7 +171,8 @@ calculate_rank(rpl_parent_t *p, rpl_rank_t base_rank)
 #if (RPL_DAG_MC == RPL_DAG_MC_ETX) || (RPL_DAG_MC == RPL_DAG_MC_ENERGY)
     rank_increase = NEIGHBOR_INFO_FIX2ETX(p->link_metric * p->dag->instance->min_hoprankinc);
 #elif RPL_DAG_MC == RPL_DAG_MC_AVG_DELAY
-    rank_increase = NEIGHBOR_INFO_FIX2ETX(p->dag->instance->min_hoprankinc);
+//    rank_increase = NEIGHBOR_INFO_FIX2ETX(p->dag->instance->min_hoprankinc);
+    rank_increase = NEIGHBOR_INFO_FIX2ETX(p->link_metric * p->dag->instance->min_hoprankinc);
 #else
 #error "calculate_rank: not supported."
 #endif
