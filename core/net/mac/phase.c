@@ -194,7 +194,9 @@ phase_update(const struct phase_list *list,
   }
 
   // Modification by RMonica
+#if UIP_CONF_IPV6
   neighbor_info_other_source_metric_update(neighbor, 1); // notify change to RPL
+#endif /* UIP_CONF_IPV6 */
 }
 /*---------------------------------------------------------------------------*/
 /* Function added by RMonica
