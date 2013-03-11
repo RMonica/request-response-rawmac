@@ -165,7 +165,7 @@ calculate_rank(rpl_parent_t *p, rpl_rank_t base_rank)
     if(base_rank == 0) {
       return INFINITE_RANK;
     }
-    rank_increase = NEIGHBOR_INFO_FIX2ETX(INITIAL_LINK_METRIC) * RPL_MIN_HOPRANKINC;
+    rank_increase = NEIGHBOR_INFO_FIX2ETX(RPL_INIT_LINK_METRIC) * RPL_MIN_HOPRANKINC;
   } else {
     /* multiply first, then scale down to avoid truncation effects */
 #if (RPL_DAG_MC == RPL_DAG_MC_ETX) || (RPL_DAG_MC == RPL_DAG_MC_ENERGY)

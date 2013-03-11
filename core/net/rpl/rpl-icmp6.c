@@ -171,6 +171,7 @@ dis_input(void)
     if(instance->used == 1) {
 #if RPL_LEAF_ONLY
       if(!uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
+	PRINTF("RPL: LEAF ONLY Multicast DIS will NOT reset DIO timer\n");
 #else /* !RPL_LEAF_ONLY */
       if(uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
         PRINTF("RPL: Multicast DIS => reset DIO timer\n");
@@ -441,6 +442,7 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
   /* In leaf mode, we send DIO message only as unicasts in response to 
      unicast DIS messages. */
   if(uc_addr == NULL) {
+    PRINTF("RPL: LEAF ONLY have multicast addr: skip dio_output\n");
     return;
   }
 #endif /* RPL_LEAF_ONLY */
@@ -453,6 +455,7 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
   buffer[pos++] = dag->version;
 
 #if RPL_LEAF_ONLY
+  PRINTF("RPL: LEAF ONLY DIO rank set to INFINITE_RANK\n");
   set16(buffer, pos, INFINITE_RANK);
 #else /* RPL_LEAF_ONLY */
   set16(buffer, pos, dag->rank);
@@ -554,6 +557,11 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
   }
 
 #if RPL_LEAF_ONLY
+#if (DEBUG) & DEBUG_PRINT
+  if(uc_addr == NULL) {
+    PRINTF("RPL: LEAF ONLY sending unicast-DIO from multicast-DIO\n");
+  }
+#endif /* DEBUG_PRINT */
   PRINTF("RPL: Sending unicast-DIO with rank %u to ",
       (unsigned)dag->rank);
   PRINT6ADDR(uc_addr);
