@@ -39,6 +39,7 @@ tools/cooja/dist/
 tools/collect-view/build/
 tools/collect-view/dist/
 COOJA.testlog
+tools/cooja/apps/mobility/lib/
 tools/cooja/apps/mrm/lib/
 tools/cooja/apps/mspsim/lib/
 tools/cooja/apps/powertracker/lib/
@@ -77,3 +78,6 @@ contiki-cc2530dk.lib
 *.d64
 *.d71
 *.d81
+/.classpath
+/.cproject
+/.project
