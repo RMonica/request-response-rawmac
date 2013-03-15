@@ -33,6 +33,7 @@ Makefile.target
 doc/html
 patches-*
 tools/tunslip6
+*.wsn430
 build
 tools/coffee-manager/build/
 tools/cooja/dist/
