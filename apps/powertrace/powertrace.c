@@ -28,7 +28,6 @@
  *
  * This file is part of the Contiki operating system.
  *
- * $Id: powertrace.c,v 1.8 2010/10/06 18:40:21 adamdunkels Exp $
  */
 
 /**
@@ -134,7 +133,7 @@ powertrace_print(char *str)
          (int)((100L * listen) / time),
          (int)((10000L * listen) / time - (100L * listen / time) * 100));
 
-  for(s = list_head(stats_list); s != NULL; s = list_item_next(s)) {
+/*  for(s = list_head(stats_list); s != NULL; s = list_item_next(s)) {
 
 #if ! UIP_CONF_IPV6
     printf("%s %lu SP %d.%d %lu %u %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu (channel %d radio %d.%02d%% / %d.%02d%%)\n",
@@ -188,7 +187,7 @@ powertrace_print(char *str)
     s->last_output_txtime = s->output_txtime;
     s->last_output_rxtime = s->output_rxtime;
     
-  }
+  }*/
   seqno++;
 }
 /*---------------------------------------------------------------------------*/

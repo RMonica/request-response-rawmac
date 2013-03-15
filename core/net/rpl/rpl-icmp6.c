@@ -42,6 +42,17 @@
  *               Mathieu Pouillot <m.pouillot@watteco.com>
  */
 
+/* Modified by RMonica
+ * patches: - different nodes may have different cycle times
+ *          - add RPL function RPL_DAG_MC_AVG_DELAY
+ *
+ * DIO metric size increased by 2, caused by field "node_cycle_time" (see rpl_metric_container in rpl.h)
+ * the field is initialized by the sender using the objective function (see rpl-of-etx.c)
+ * and stored by the receiver using contikimac_cycle_time_update (see net/contikimac.c)
+ * the transmission of the metric for RPL_DAG_MC_AVG_DELAY doesn't require additional space
+ * because it's inside an union with the ETX metric (see rpl_metric_container in rpl.h)
+ */
+
 #include "net/tcpip.h"
 #include "net/uip.h"
 #include "net/uip-ds6.h"
@@ -53,7 +64,9 @@
 #include <limits.h>
 #include <string.h>
 
-#define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_NONE
+//#define DEBUG 2
+#define DEBUG DEBUG_PRINT
 
 #include "net/uip-debug.h"
 
@@ -158,6 +171,7 @@ dis_input(void)
     if(instance->used == 1) {
 #if RPL_LEAF_ONLY
       if(!uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
+	PRINTF("RPL: LEAF ONLY Multicast DIS will NOT reset DIO timer\n");
 #else /* !RPL_LEAF_ONLY */
       if(uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
         PRINTF("RPL: Multicast DIS => reset DIO timer\n");
@@ -297,7 +311,7 @@ dio_input(void)
 
     switch(subopt_type) {
     case RPL_OPTION_DAG_METRIC_CONTAINER:
-      if(len < 6) {
+      if(len < 8) {
         PRINTF("RPL: Invalid DAG MC, len = %d\n", len);
 	RPL_STAT(rpl_stats.malformed_msgs++);
         return;
@@ -307,10 +321,11 @@ dio_input(void)
       dio.mc.flags |= buffer[i + 4] >> 7;
       dio.mc.aggr = (buffer[i + 4] >> 4) & 0x3;
       dio.mc.prec = buffer[i + 4] & 0xf;
-      dio.mc.length = buffer[i + 5];
+      dio.mc.node_cycle_time = get16(buffer, i + 5);
+      dio.mc.length = buffer[i + 7];
 
       if(dio.mc.type == RPL_DAG_MC_ETX) {
-        dio.mc.obj.etx = get16(buffer, i + 6);
+        dio.mc.obj.etx = get16(buffer, i + 8);
 
         PRINTF("RPL: DAG MC: type %u, flags %u, aggr %u, prec %u, length %u, ETX %u\n",
 	       (unsigned)dio.mc.type,  
@@ -320,12 +335,24 @@ dio_input(void)
 	       (unsigned)dio.mc.length, 
 	       (unsigned)dio.mc.obj.etx);
       } else if(dio.mc.type == RPL_DAG_MC_ENERGY) {
-        dio.mc.obj.energy.flags = buffer[i + 6];
-        dio.mc.obj.energy.energy_est = buffer[i + 7];
-      } else {
+        dio.mc.obj.energy.flags = buffer[i + 8];
+        dio.mc.obj.energy.energy_est = buffer[i + 9];
+      } else if(dio.mc.type == RPL_DAG_MC_AVG_DELAY) {
+        dio.mc.obj.avg_delay_to_sink = get16(buffer, i + 8);
+      }else {
        PRINTF("RPL: Unhandled DAG MC type: %u\n", (unsigned)dio.mc.type);
        return;
       }
+
+      /* Added by RMonica
+       * Send cycle time updates to ContikiMAC
+       */
+      /* scope only */ {
+        rimeaddr_t macaddr;
+        uip_ds6_get_addr_iid(&from,(uip_lladdr_t *)&macaddr);
+        contikimac_cycle_time_update(&macaddr,dio.mc.node_cycle_time);
+      }
+
       break;
     case RPL_OPTION_ROUTE_INFO:
       if(len < 9) {
@@ -415,6 +442,7 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
   /* In leaf mode, we send DIO message only as unicasts in response to 
      unicast DIS messages. */
   if(uc_addr == NULL) {
+    PRINTF("RPL: LEAF ONLY have multicast addr: skip dio_output\n");
     return;
   }
 #endif /* RPL_LEAF_ONLY */
@@ -427,6 +455,7 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
   buffer[pos++] = dag->version;
 
 #if RPL_LEAF_ONLY
+  PRINTF("RPL: LEAF ONLY DIO rank set to INFINITE_RANK\n");
   set16(buffer, pos, INFINITE_RANK);
 #else /* RPL_LEAF_ONLY */
   set16(buffer, pos, dag->rank);
@@ -459,11 +488,13 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
     instance->of->update_metric_container(instance);
 
     buffer[pos++] = RPL_OPTION_DAG_METRIC_CONTAINER;
-    buffer[pos++] = 6;
+    buffer[pos++] = 8; // size of the metric container
     buffer[pos++] = instance->mc.type;
     buffer[pos++] = instance->mc.flags >> 1;
     buffer[pos] = (instance->mc.flags & 1) << 7;
     buffer[pos++] |= (instance->mc.aggr << 4) | instance->mc.prec;
+    set16(buffer, pos, instance->mc.node_cycle_time);
+    pos += 2;
     if(instance->mc.type == RPL_DAG_MC_ETX) {
       buffer[pos++] = 2;
       set16(buffer, pos, instance->mc.obj.etx);
@@ -472,6 +503,10 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
       buffer[pos++] = 2;
       buffer[pos++] = instance->mc.obj.energy.flags;
       buffer[pos++] = instance->mc.obj.energy.energy_est;
+    } else if(instance->mc.type == RPL_DAG_MC_AVG_DELAY) {
+      buffer[pos++] = 2;
+      set16(buffer, pos, instance->mc.obj.avg_delay_to_sink);
+      pos += 2;
     } else {
       PRINTF("RPL: Unable to send DIO because of unhandled DAG MC type %u\n",
 	(unsigned)instance->mc.type);
@@ -522,6 +557,11 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
   }
 
 #if RPL_LEAF_ONLY
+#if (DEBUG) & DEBUG_PRINT
+  if(uc_addr == NULL) {
+    PRINTF("RPL: LEAF ONLY sending unicast-DIO from multicast-DIO\n");
+  }
+#endif /* DEBUG_PRINT */
   PRINTF("RPL: Sending unicast-DIO with rank %u to ",
       (unsigned)dag->rank);
   PRINT6ADDR(uc_addr);

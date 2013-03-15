@@ -31,7 +31,6 @@
  *
  * Author: Adam Dunkels <adam@sics.se>
  *
- * $Id: tapdev6.c,v 1.2 2006/08/10 19:22:23 bg- Exp $
  */
 
 
@@ -188,7 +187,7 @@ tapdev_send(void)
     printf("\n");
   } else {
     memcpy(&BUF->dest, addr, 6);
-    memcpy(&BUF->src, &uip_ethaddr, 6);
+    memcpy(&BUF->src, &uip_lladdr, 6);
     uip_len += sizeof(struct uip_eth_hdr);
     do_send();
   }

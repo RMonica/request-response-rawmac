@@ -71,7 +71,7 @@ The COOJA Simulator
   <target name="compile" depends="init">
     <mkdir dir="${build}"/>
     <javac srcdir="${java}" destdir="${build}" debug="on"
-           includeantruntime="false">
+           includeantruntime="false" encoding="ISO-8859-1">
       <classpath>
         <pathelement path="."/>
         <pathelement location="lib/jdom.jar"/>

@@ -284,7 +284,7 @@ void
 tcp_attach(struct uip_conn *conn,
 	   void *appstate)
 {
-  register uip_tcp_appstate_t *s;
+  uip_tcp_appstate_t *s;
 
   s = &conn->appstate;
   s->p = PROCESS_CURRENT();
@@ -298,7 +298,7 @@ void
 udp_attach(struct uip_udp_conn *conn,
 	   void *appstate)
 {
-  register uip_udp_appstate_t *s;
+  uip_udp_appstate_t *s;
 
   s = &conn->appstate;
   s->p = PROCESS_CURRENT();
@@ -373,7 +373,7 @@ eventhandler(process_event_t ev, process_data_t data)
   register struct listenport *l;
 #endif /*UIP_TCP*/
   struct process *p;
-   
+
   switch(ev) {
     case PROCESS_EVENT_EXITED:
       /* This is the event we get if a process has exited. We go through
@@ -394,7 +394,7 @@ eventhandler(process_event_t ev, process_data_t data)
       }
 	 
       {
-        register struct uip_conn *cptr;
+        struct uip_conn *cptr;
 	    
         for(cptr = &uip_conns[0]; cptr < &uip_conns[UIP_CONNS]; ++cptr) {
           if(cptr->appstate.p == p) {
@@ -406,7 +406,7 @@ eventhandler(process_event_t ev, process_data_t data)
 #endif /* UIP_TCP */
 #if UIP_UDP
       {
-        register struct uip_udp_conn *cptr;
+        struct uip_udp_conn *cptr;
 
         for(cptr = &uip_udp_conns[0];
             cptr < &uip_udp_conns[UIP_UDP_CONNS]; ++cptr) {
@@ -471,13 +471,13 @@ eventhandler(process_event_t ev, process_data_t data)
         }*/
 #if !UIP_CONF_ROUTER
         if(data == &uip_ds6_timer_rs &&
-           etimer_expired(&uip_ds6_timer_rs)){
+           etimer_expired(&uip_ds6_timer_rs)) {
           uip_ds6_send_rs();
           tcpip_ipv6_output();
         }
 #endif /* !UIP_CONF_ROUTER */
         if(data == &uip_ds6_timer_periodic &&
-           etimer_expired(&uip_ds6_timer_periodic)){
+           etimer_expired(&uip_ds6_timer_periodic)) {
           uip_ds6_periodic();
           tcpip_ipv6_output();
         }
@@ -586,6 +586,11 @@ tcpip_ipv6_output(void)
       } else {
 	nexthop = &locrt->nexthop;
       }
+#if TCPIP_CONF_ANNOTATE_TRANSMISSIONS
+      if(nexthop != NULL) {
+	printf("#L %u 1; red\n", nexthop->u8[sizeof(uip_ipaddr_t) - 1]);
+      }
+#endif /* TCPIP_CONF_ANNOTATE_TRANSMISSIONS */
     }
     /* End of next hop determination */
 #if UIP_CONF_IPV6_RPL
@@ -692,7 +697,7 @@ tcpip_poll_tcp(struct uip_conn *conn)
 void
 tcpip_uipcall(void)
 {
-  register uip_udp_appstate_t *ts;
+  uip_udp_appstate_t *ts;
   
 #if UIP_UDP
   if(uip_conn != NULL) {
@@ -707,7 +712,7 @@ tcpip_uipcall(void)
 #if UIP_TCP
  {
    static unsigned char i;
-   register struct listenport *l;
+   struct listenport *l;
    
    /* If this is a connection request for a listening port, we must
       mark the connection with the right process ID. */
