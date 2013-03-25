@@ -999,6 +999,19 @@ rtimer_cycle_time_t contikimac_get_average_delay_for_routing(const rimeaddr_t * 
 #endif
 }
 /*---------------------------------------------------------------------------*/
+/*
+ * Function added by Pietro Gonizzi
+ * Description: shift the wake-up phase of the node to meet routing QoS
+ */
+static void contikimac_set_phase(const rimeaddr_t * addr)
+{
+	// get the phase of the node addr
+	// get my phase
+
+	rtimer_cycle_time_t phase_diff = contikimac_get_average_delay_for_routing(addr);
+	// subtract and calculate the new phase
+	// set the new phase
+}
 static void
 input_packet(void)
 {
