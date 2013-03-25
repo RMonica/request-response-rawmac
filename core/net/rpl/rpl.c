@@ -53,6 +53,8 @@
 #include <limits.h>
 #include <string.h>
 
+#if UIP_CONF_IPV6
+
 #if RPL_CONF_STATS
 rpl_stats_t rpl_stats;
 #endif
@@ -263,3 +265,4 @@ rpl_init(void)
 #endif
 }
 /*---------------------------------------------------------------------------*/
+#endif /* UIP_CONF_IPV6 */

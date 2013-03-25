@@ -70,6 +70,7 @@
 
 #include "net/uip-debug.h"
 
+#if UIP_CONF_IPV6
 /*---------------------------------------------------------------------------*/
 #define RPL_DIO_GROUNDED                 0x80
 #define RPL_DIO_MOP_SHIFT                3
@@ -873,3 +874,4 @@ uip_rpl_input(void)
 
   uip_len = 0;
 }
+#endif /* UIP_CONF_IPV6 */
