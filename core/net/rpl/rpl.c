@@ -55,8 +55,6 @@
 
 #if UIP_CONF_IPV6
 
-#if UIP_CONF_IPV6
-
 #if RPL_CONF_STATS
 rpl_stats_t rpl_stats;
 #endif
