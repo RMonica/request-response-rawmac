@@ -64,9 +64,9 @@
 #include <limits.h>
 #include <string.h>
 
-#define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_NONE
 //#define DEBUG 2
-//#define DEBUG DEBUG_PRINT
+#define DEBUG DEBUG_PRINT
 
 #include "net/uip-debug.h"
 
