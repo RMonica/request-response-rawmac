@@ -52,9 +52,8 @@
 #include <limits.h>
 #include <string.h>
 
-//#define DEBUG DEBUG_NONE
-//#define DEBUG 2
-#define DEBUG DEBUG_PRINT
+#define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_PRINT
 #include "net/uip-debug.h"
 
 #include "net/neighbor-info.h"
@@ -1073,7 +1072,7 @@ rpl_process_parent_event(rpl_instance_t *instance, rpl_parent_t *p)
 
 #if DEBUG
   if(DAG_RANK(old_rank, instance) != DAG_RANK(instance->current_dag->rank, instance)) {
-    PRINTF("RPL: Moving in the instance from rank %hu to %hu\n",
+    PRINTF("RPL: Moving in the instance from rank %u to %u\n",
 	   DAG_RANK(old_rank, instance), DAG_RANK(instance->current_dag->rank, instance));
     if(instance->current_dag->rank != INFINITE_RANK) {
       PRINTF("RPL: The preferred parent is ");

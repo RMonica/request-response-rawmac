@@ -107,7 +107,6 @@ struct hdr {
 #if (RTIMER_ARCH_SECOND % CYCLE_TIME) != 0
 #define SYNC_CYCLE_STARTS                    1
 #endif
-
 /* Modified by RMonica
  *
  * CYCLE_TIME_SYNC_TICKS is the remaining of the division of RTIMER_ARCH_SECOND by
@@ -233,7 +232,7 @@ static volatile uint8_t contikimac_keep_radio_on = 0;
 static volatile unsigned char we_are_sending = 0;
 static volatile unsigned char radio_is_on = 0;
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -322,7 +321,7 @@ schedule_powercycle(struct rtimer *t, rtimer_clock_t time)
     r = rtimer_set(t, RTIMER_TIME(t) + time, 1,
                    (void (*)(struct rtimer *, void *))powercycle, NULL);
     if(r != RTIMER_OK) {
-      printf("schedule_powercycle: could not set rtimer\n");
+    	PRINTF("schedule_powercycle: could not set rtimer\n");
     }
   }
 }
@@ -341,7 +340,7 @@ schedule_powercycle_fixed(struct rtimer *t, rtimer_clock_t fixed_time)
     r = rtimer_set(t, fixed_time, 1,
                    (void (*)(struct rtimer *, void *))powercycle, NULL);
     if(r != RTIMER_OK) {
-      printf("schedule_powercycle: could not set rtimer\n");
+      PRINTF("schedule_powercycle: could not set rtimer\n");
     }
   }
 }
@@ -377,6 +376,7 @@ powercycle_turn_radio_on(void)
 static char
 powercycle(struct rtimer *t, void *ptr)
 {
+	PRINTF("contikimac: powercycle func\n");
 #if SYNC_CYCLE_STARTS
 #if PRECISE_SYNC_CYCLE_STARTS
   static volatile rtimer_clock_t sync_cycle_start;
@@ -393,7 +393,10 @@ powercycle(struct rtimer *t, void *ptr)
   sync_cycle_phase = 0;
 #endif
 
+  PRINTF("contikimac: a questo punto solo una volta\n");
+
 #if !(SYNC_CYCLE_STARTS && PRECISE_SYNC_CYCLE_STARTS)
+  PRINTF("contikimac: qui si\n");
   cycle_start = RTIMER_NOW();
 #endif
 
@@ -404,6 +407,7 @@ powercycle(struct rtimer *t, void *ptr)
 
 #if SYNC_CYCLE_STARTS
 #if PRECISE_SYNC_CYCLE_STARTS
+    PRINTF("contikimac: PRECISE_SYNC_CYCLE_STARTS\n");
     /* Compute cycle start when RTIMER_ARCH_SECOND is not a multiple
        of CHANNEL_CHECK_RATE */
     if((++sync_cycle_phase) >= NETSTACK_RDC_CHANNEL_CHECK_RATE) {
@@ -418,6 +422,7 @@ powercycle(struct rtimer *t, void *ptr)
 #endif
     }
 #else  /* if !PRECISE_SYNC_CYCLE_STARTS */
+    PRINTF("contikimac: SYNC_CYCLE_STARTS\n");
     if ((++sync_cycle_phase) >= CYCLE_RATE) {
       sync_cycle_phase = 0;
       }
@@ -427,6 +432,7 @@ powercycle(struct rtimer *t, void *ptr)
     cycle_start += (sync_cycle_phase < CYCLE_TIME_SYNC_TICKS) ? (CYCLE_TIME + 1) : CYCLE_TIME;
 #endif /* PRECISE_SYNC_CYCLE_STARTS */
 #else  /* if !SYNC_CYCLE_STARTS */
+    PRINTF("contikimac: nothing\n");
     cycle_start += CYCLE_TIME;
 #endif /* SYNC_CYCLE_STARTS */
 
@@ -434,12 +440,13 @@ powercycle(struct rtimer *t, void *ptr)
 
     for(count = 0; count < CCA_COUNT_MAX; ++count) {
       t0 = RTIMER_NOW();
+//      PRINTF("contikimac: count %u t0 %u\n", count, t0);
       if(we_are_sending == 0 && we_are_receiving_burst == 0) {
         powercycle_turn_radio_on();
         /* Check if a packet is seen in the air. If so, we keep the
              radio on for a while (LISTEN_TIME_AFTER_PACKET_DETECTED) to
              be able to receive the packet. We also continuously check
-             the radio medium to make sure that we wasn't woken up by a
+             the radio medium to make sure that we were not woken up by a
              false positive: a spurious radio interference that was not
              caused by an incoming packet. */
         if(NETSTACK_RADIO.channel_clear() == 0) {
@@ -526,7 +533,9 @@ powercycle(struct rtimer *t, void *ptr)
         PT_YIELD(&pt);
       }
 #else
+	  PRINTF("contikimac: qui\n");
       schedule_powercycle_fixed(t, CYCLE_TIME + cycle_start);
+      //schedule_powercycle_fixed(t, RTIMER_NOW() + CYCLE_TIME);
       PT_YIELD(&pt);
 #endif
     }
@@ -964,7 +973,7 @@ void contikimac_cycle_time_update(const rimeaddr_t * addr,rtimer_cycle_time_t ne
     newtime = 0;
   }
 
-  //printf("contikimac_cycle_time_update: %d source: %u\n",((int)newtime),(int)(addr->u8[7]));
+  //PRINTF("contikimac_cycle_time_update: %d source: %u\n",((int)newtime),(int)(addr->u8[7]));
   cycle_time_update(&phase_list, addr, newtime);
 #endif
 }
@@ -1003,14 +1012,15 @@ rtimer_cycle_time_t contikimac_get_average_delay_for_routing(const rimeaddr_t * 
  * Function added by Pietro Gonizzi
  * Description: shift the wake-up phase of the node to meet routing QoS
  */
-static void contikimac_set_phase(const rimeaddr_t * addr)
+static void contikimac_set_phase(const rimeaddr_t * addr, int keep_radio_on)
 {
 	// get the phase of the node addr
 	// get my phase
 
-	rtimer_cycle_time_t phase_diff = contikimac_get_average_delay_for_routing(addr);
+	//rtimer_cycle_time_t phase_diff = contikimac_get_average_delay_for_routing(addr);
 	// subtract and calculate the new phase
 	// set the new phase
+	//turn_off(keep_radio_on);
 }
 static void
 input_packet(void)
@@ -1020,7 +1030,7 @@ input_packet(void)
     off();
   }
 
-  /*  printf("cycle_start 0x%02x 0x%02x\n", cycle_start, cycle_start % CYCLE_TIME);*/
+  /*  PRINTF("cycle_start 0x%02x 0x%02x\n", cycle_start, cycle_start % CYCLE_TIME);*/
   
   if(packetbuf_totlen() > 0 && NETSTACK_FRAMER.parse() >= 0) {
 
@@ -1065,7 +1075,7 @@ input_packet(void)
              rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_SENDER),
                           &received_seqnos[i].sender)) {
             /* Drop the packet. */
-            /*        printf("Drop duplicate ContikiMAC layer packet\n");*/
+            /*        PRINTF("Drop duplicate ContikiMAC layer packet\n");*/
             return;
           }
         }
@@ -1117,12 +1127,14 @@ init(void)
 #if WITH_PHASE_OPTIMIZATION
   phase_init(&phase_list);
 #endif /* WITH_PHASE_OPTIMIZATION */
+  PRINTF("contikimac: init done\n");
 
 }
 /*---------------------------------------------------------------------------*/
 static int
 turn_on(void)
 {
+  PRINTF("contikimac: turn on\n");
   if(contikimac_is_on == 0) {
     contikimac_is_on = 1;
     contikimac_keep_radio_on = 0;
@@ -1135,6 +1147,7 @@ turn_on(void)
 static int
 turn_off(int keep_radio_on)
 {
+  PRINTF("contikimac: turn off\n");
   contikimac_is_on = 0;
   contikimac_keep_radio_on = keep_radio_on;
   if(keep_radio_on) {
