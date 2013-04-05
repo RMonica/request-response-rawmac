@@ -376,7 +376,6 @@ powercycle_turn_radio_on(void)
 static char
 powercycle(struct rtimer *t, void *ptr)
 {
-	PRINTF("contikimac: powercycle func\n");
 #if SYNC_CYCLE_STARTS
 #if PRECISE_SYNC_CYCLE_STARTS
   static volatile rtimer_clock_t sync_cycle_start;
@@ -393,10 +392,7 @@ powercycle(struct rtimer *t, void *ptr)
   sync_cycle_phase = 0;
 #endif
 
-  PRINTF("contikimac: a questo punto solo una volta\n");
-
 #if !(SYNC_CYCLE_STARTS && PRECISE_SYNC_CYCLE_STARTS)
-  PRINTF("contikimac: qui si\n");
   cycle_start = RTIMER_NOW();
 #endif
 
@@ -407,7 +403,6 @@ powercycle(struct rtimer *t, void *ptr)
 
 #if SYNC_CYCLE_STARTS
 #if PRECISE_SYNC_CYCLE_STARTS
-    PRINTF("contikimac: PRECISE_SYNC_CYCLE_STARTS\n");
     /* Compute cycle start when RTIMER_ARCH_SECOND is not a multiple
        of CHANNEL_CHECK_RATE */
     if((++sync_cycle_phase) >= NETSTACK_RDC_CHANNEL_CHECK_RATE) {
@@ -422,7 +417,6 @@ powercycle(struct rtimer *t, void *ptr)
 #endif
     }
 #else  /* if !PRECISE_SYNC_CYCLE_STARTS */
-    PRINTF("contikimac: SYNC_CYCLE_STARTS\n");
     if ((++sync_cycle_phase) >= CYCLE_RATE) {
       sync_cycle_phase = 0;
       }
@@ -432,7 +426,6 @@ powercycle(struct rtimer *t, void *ptr)
     cycle_start += (sync_cycle_phase < CYCLE_TIME_SYNC_TICKS) ? (CYCLE_TIME + 1) : CYCLE_TIME;
 #endif /* PRECISE_SYNC_CYCLE_STARTS */
 #else  /* if !SYNC_CYCLE_STARTS */
-    PRINTF("contikimac: nothing\n");
     cycle_start += CYCLE_TIME;
 #endif /* SYNC_CYCLE_STARTS */
 
@@ -533,7 +526,6 @@ powercycle(struct rtimer *t, void *ptr)
         PT_YIELD(&pt);
       }
 #else
-	  PRINTF("contikimac: qui\n");
       schedule_powercycle_fixed(t, CYCLE_TIME + cycle_start);
       //schedule_powercycle_fixed(t, RTIMER_NOW() + CYCLE_TIME);
       PT_YIELD(&pt);
