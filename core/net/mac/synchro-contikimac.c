@@ -285,6 +285,9 @@ static struct timer broadcast_rate_timer;
 static int broadcast_rate_counter;
 #endif /* CONTIKIMAC_CONF_BROADCAST_RATE_LIMIT */
 
+static int turn_on(void);
+static int turn_off(int);
+
 /*---------------------------------------------------------------------------*/
 static void
 on(void)
@@ -394,6 +397,7 @@ powercycle(struct rtimer *t, void *ptr)
 
 #if !(SYNC_CYCLE_STARTS && PRECISE_SYNC_CYCLE_STARTS)
   cycle_start = RTIMER_NOW();
+  PRINTF("contikimac: cycle_start initial %u\n", cycle_start);
 #endif
 
   while(1) {
@@ -680,6 +684,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
                      GUARD_TIME,
                      mac_callback, mac_callback_ptr, buf_list);
     if(ret == PHASE_DEFERRED) {
+    	 PRINTF("contikimac: send failed, MAC_TX_DEFERRED\n");
       return MAC_TX_DEFERRED;
     }
     if(ret != PHASE_UNKNOWN) {
@@ -994,7 +999,7 @@ rtimer_cycle_time_t contikimac_get_MFT_for_routing()
 rtimer_cycle_time_t contikimac_get_average_delay_for_routing(const rimeaddr_t * toNode)
 {
 #if WITH_PHASE_OPTIMIZATION
-  return phase_get_average_delay(&phase_list,toNode,(2 * GUARD_TIME),cycle_start);
+  return phase_get_average_delay(&phase_list, toNode,( 2 * GUARD_TIME), cycle_start);
 #else
   return (CYCLE_TIME >> 1) + (2 * GUARD_TIME);
 #endif
@@ -1004,16 +1009,35 @@ rtimer_cycle_time_t contikimac_get_average_delay_for_routing(const rimeaddr_t * 
  * Function added by Pietro Gonizzi
  * Description: shift the wake-up phase of the node to meet routing QoS
  */
-static void contikimac_set_phase(const rimeaddr_t * addr, int keep_radio_on)
+void
+contikimac_set_phase_for_routing(rimeaddr_t * addr)
 {
-	// get the phase of the node addr
-	// get my phase
+	rtimer_clock_t cycle_offset = phase_get_neighbor_phase(&phase_list, addr);
 
-	//rtimer_cycle_time_t phase_diff = contikimac_get_average_delay_for_routing(addr);
-	// subtract and calculate the new phase
-	// set the new phase
-	//turn_off(keep_radio_on);
+	if(cycle_offset != 0) {
+		PRINTF("The phase of %u is known\n", addr->u8[7]);
+		// TODO: shift only if not done already
+		// solution 1: store the parent node address in a local variable
+		// solution 2: check the phase offset to the parent node address and adjust if needed
+		//PRINTF("contikimac: cycle_start %u, cycle_offset %u, CYCLE_TIME %u\n", cycle_start, cycle_offset, CYCLE_TIME);
+		//PRINTF("contikimac: (cycle_offset - cycle_start) mod CYCLE_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME);
+		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
+/*		if((cycle_offset - cycle_start) % CYCLE_TIME != 4*GUARD_TIME){
+			//PRINTF("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
+			//int ret = turn_off(0);
+			//cycle_start = cycle_offset - 4*GUARD_TIME;
+			//ret = turn_on();
+		} else
+			PRINTF("contikimac: Phase already shifted\n");*/
+	} else {
+		// TODO: wait until the phase is discovered and then shift
+		PRINTF("The phase of %u is UNknown\n", addr->u8[7]);
+		return;
+	}
+
+// TODO: check for any ongoing transmissions/receptions before switching off brutally
 }
+
 static void
 input_packet(void)
 {
@@ -1174,3 +1198,10 @@ contikimac_debug_print(void)
   return 0;
 }
 /*---------------------------------------------------------------------------*/
+
+/*void contikimac_get_cycle_start(void)
+{
+	PRINTF("cycle_start %u\n", cycle_start);
+	PRINTF("contikimac: CYCLE_TIME %u\n", CYCLE_TIME);
+	PRINTF("contikimac: RTIMER_ARCH_SECOND %u\n", RTIMER_ARCH_SECOND);
+}*/

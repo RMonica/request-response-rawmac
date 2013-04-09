@@ -84,7 +84,7 @@ struct phase_queueitem {
 
 MEMB(queued_packets_memb, struct phase_queueitem, PHASE_QUEUESIZE);
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -470,3 +470,15 @@ phase_init(struct phase_list *list)
   memb_init(&queued_packets_memb);
 }
 /*---------------------------------------------------------------------------*/
+
+rtimer_clock_t
+phase_get_neighbor_phase(const struct phase_list *list, const rimeaddr_t *neighbor)
+{
+	struct phase * e = find_neighbor(list,neighbor);
+
+	if(e && e->time != UNKNOWN_TIME && e->cycle_time == CYCLE_TIME)
+		return e->time;
+	else {
+		return 0;
+	}
+}

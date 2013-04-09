@@ -46,4 +46,6 @@
 
 extern const struct rdc_driver synchro_contikimac_driver;
 
+void contikimac_set_phase(rimeaddr_t *);
+
 #endif /* SYNCHRO_CONTIKIMAC_H */
