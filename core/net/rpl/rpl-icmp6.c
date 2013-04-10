@@ -64,8 +64,8 @@
 #include <limits.h>
 #include <string.h>
 
-//#define DEBUG DEBUG_NONE
-#define DEBUG DEBUG_PRINT
+#define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_PRINT
 
 #include "net/uip-debug.h"
 
@@ -613,9 +613,9 @@ dao_input(void)
   uip_ipaddr_copy(&dao_sender_addr, &UIP_IP_BUF->srcipaddr);
 
   /* Destination Advertisement Object */
-  PRINTF("RPL: Received a DAO from ");
+  printf("RPL: Received a DAO from ");
   PRINT6ADDR(&dao_sender_addr);
-  PRINTF("\n");
+  printf("\n");
 
   buffer = UIP_ICMP_PAYLOAD;
   buffer_length = uip_len - uip_l3_icmp_hdr_len;
@@ -725,9 +725,9 @@ dao_input(void)
 
   if(learned_from == RPL_ROUTE_FROM_UNICAST_DAO) {
     if(dag->preferred_parent) {
-      PRINTF("RPL: Forwarding DAO to parent ");
+      printf("RPL: Forwarding DAO to parent ");
       PRINT6ADDR(&dag->preferred_parent->addr);
-      PRINTF("\n");
+      printf("\n");
       uip_icmp6_send(&dag->preferred_parent->addr,
                      ICMP6_RPL, RPL_CODE_DAO, buffer_length);
     }

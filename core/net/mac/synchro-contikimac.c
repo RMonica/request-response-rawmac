@@ -232,7 +232,7 @@ static volatile uint8_t contikimac_keep_radio_on = 0;
 static volatile unsigned char we_are_sending = 0;
 static volatile unsigned char radio_is_on = 0;
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -1015,23 +1015,24 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 	rtimer_clock_t cycle_offset = phase_get_neighbor_phase(&phase_list, addr);
 
 	if(cycle_offset != 0) {
-		PRINTF("The phase of %u is known\n", addr->u8[7]);
+		//printf("The phase of %u is known\n", addr->u8[7]);
 		// TODO: shift only if not done already
 		// solution 1: store the parent node address in a local variable
-		// solution 2: check the phase offset to the parent node address and adjust if needed
+		// solution 2: check the phase offset to the parent node address and adjust if needed (use this)
 		//PRINTF("contikimac: cycle_start %u, cycle_offset %u, CYCLE_TIME %u\n", cycle_start, cycle_offset, CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_offset - cycle_start) mod CYCLE_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
-/*		if((cycle_offset - cycle_start) % CYCLE_TIME != 4*GUARD_TIME){
-			//PRINTF("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
-			//int ret = turn_off(0);
-			//cycle_start = cycle_offset - 4*GUARD_TIME;
-			//ret = turn_on();
+		if((cycle_offset - cycle_start) % CYCLE_TIME < 2*GUARD_TIME  || (cycle_offset - cycle_start) % CYCLE_TIME > 2*(GUARD_TIME + CCA_SLEEP_TIME)){
+			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
+			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
+			int ret = turn_off(0);
+			cycle_start = cycle_offset - 2*GUARD_TIME;
+			ret = turn_on();
 		} else
-			PRINTF("contikimac: Phase already shifted\n");*/
+			printf("contikimac: Phase already shifted\n");
 	} else {
 		// TODO: wait until the phase is discovered and then shift
-		PRINTF("The phase of %u is UNknown\n", addr->u8[7]);
+		printf("The phase of %u is UNknown\n", addr->u8[7]);
 		return;
 	}
 
