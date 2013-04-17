@@ -162,13 +162,13 @@ phase_update(const struct phase_list *list,
        phase (rebooted). We try a number of transmissions to it
        before we drop it from the phase list. */
     if(mac_status == MAC_TX_NOACK) {
-      PRINTF("phase noacks %d to %d.%d\n", e->noacks, neighbor->u8[0], neighbor->u8[1]);
+      printf("phase noacks %d to %d.%d\n", e->noacks, neighbor->u8[6], neighbor->u8[7]);
       e->noacks++;
       if(e->noacks == 1) {
         timer_set(&e->noacks_timer, MAX_NOACKS_TIME);
       }
       if(e->noacks >= MAX_NOACKS || timer_expired(&e->noacks_timer)) {
-        PRINTF("drop %d\n", neighbor->u8[0]);
+    	printf("drop %d\n", neighbor->u8[0]);
         list_remove(*list->list, e);
         memb_free(list->memb, e);
         return;

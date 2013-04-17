@@ -703,7 +703,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
      because we will trash the received packet. Instead, we signal
      that we have a collision, which lets the packet be received. This
      packet will be retransmitted later by the MAC protocol
-     instread. */
+     instead. */
   if(NETSTACK_RADIO.receiving_packet() || NETSTACK_RADIO.pending_packet()) {
     we_are_sending = 0;
     PRINTF("contikimac: collision receiving %d, pending %d\n",
@@ -1025,11 +1025,10 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 		if((cycle_offset - cycle_start) % CYCLE_TIME < 2*GUARD_TIME  || (cycle_offset - cycle_start) % CYCLE_TIME > 2*(GUARD_TIME + CCA_SLEEP_TIME)){
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
 			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
-			int ret = turn_off(0);
+			powercycle_turn_radio_off();
 			cycle_start = cycle_offset - 2*GUARD_TIME;
-			ret = turn_on();
-		} else
-			printf("contikimac: Phase already shifted\n");
+			//powercycle_turn_radio_on();
+		}
 	} else {
 		// TODO: wait until the phase is discovered and then shift
 		printf("The phase of %u is UNknown\n", addr->u8[7]);
