@@ -778,11 +778,12 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
 
     watchdog_periodic();
 
-    if(!is_broadcast && (is_receiver_awake || is_known_receiver) &&
+// Pietro: the following if statement could be removed
+/*    if(!is_broadcast && (is_receiver_awake || is_known_receiver) &&
        !RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + MAX_PHASE_STROBE_TIME)) {
       PRINTF("miss to %d\n", packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0]);
       break;
-    }
+    }*/
 
     len = 0;
 
@@ -1024,7 +1025,7 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
 		if((cycle_offset - cycle_start) % CYCLE_TIME < 2*GUARD_TIME  || (cycle_offset - cycle_start) % CYCLE_TIME > 2*(GUARD_TIME + CCA_SLEEP_TIME)){
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
-			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
+//			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
 			powercycle_turn_radio_off();
 			cycle_start = cycle_offset - 2*GUARD_TIME;
 			//powercycle_turn_radio_on();
