@@ -205,7 +205,8 @@ static int we_are_receiving_burst = 0;
    to a neighbor for which we have a phase lock. */
 #define MAX_PHASE_STROBE_TIME              RTIMER_ARCH_SECOND / 60
 
-
+/* Pietro: PHASE_OFFSET should be greater or equal than 2*GUARD_TIME*/
+#define PHASE_OFFSET	2*GUARD_TIME
 /* SHORTEST_PACKET_SIZE is the shortest packet that ContikiMAC
    allows. Packets have to be a certain size to be able to be detected
    by two consecutive CCA checks, and here is where we define this
@@ -1023,11 +1024,11 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 		//PRINTF("contikimac: cycle_start %u, cycle_offset %u, CYCLE_TIME %u\n", cycle_start, cycle_offset, CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_offset - cycle_start) mod CYCLE_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
-		if((cycle_offset - cycle_start) % CYCLE_TIME < 2*GUARD_TIME  || (cycle_offset - cycle_start) % CYCLE_TIME > 2*(GUARD_TIME + CCA_SLEEP_TIME)){
+		if((cycle_offset - cycle_start) % CYCLE_TIME < PHASE_OFFSET  || (cycle_offset - cycle_start) % CYCLE_TIME > (PHASE_OFFSET + 2*CCA_SLEEP_TIME)){
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
 //			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
 			powercycle_turn_radio_off();
-			cycle_start = cycle_offset - 2*GUARD_TIME;
+			cycle_start = cycle_offset - PHASE_OFFSET;
 			//powercycle_turn_radio_on();
 		}
 	} else {
