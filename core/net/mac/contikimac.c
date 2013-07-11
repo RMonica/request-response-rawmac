@@ -772,11 +772,11 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
 
     watchdog_periodic();
 
-/*    if(!is_broadcast && (is_receiver_awake || is_known_receiver) &&
+    if(!is_broadcast && (is_receiver_awake || is_known_receiver) &&
        !RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + MAX_PHASE_STROBE_TIME)) {
       PRINTF("miss to %d\n", packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0]);
       break;
-    }*/
+    }
 
     len = 0;
 

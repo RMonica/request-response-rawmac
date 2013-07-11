@@ -435,7 +435,7 @@ phase_wait(struct phase_list *list,
 
     if(ctimewait > PHASE_DEFER_THRESHOLD) {
       struct phase_queueitem *p;
-      
+
       p = memb_alloc(&queued_packets_memb);
       if(p != NULL) {
         if(buf_list == NULL) {

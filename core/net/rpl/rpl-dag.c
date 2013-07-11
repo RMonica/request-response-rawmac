@@ -52,8 +52,8 @@
 #include <limits.h>
 #include <string.h>
 
-#define DEBUG DEBUG_NONE
-//#define DEBUG DEBUG_PRINT
+//#define DEBUG DEBUG_NONE
+#define DEBUG DEBUG_ANNOTATE
 #include "net/uip-debug.h"
 
 #include "net/neighbor-info.h"
@@ -648,8 +648,8 @@ rpl_select_dag(rpl_instance_t *instance, rpl_parent_t *p)
     }
     rpl_reset_dio_timer(instance);
   } else if(best_dag->rank != old_rank) {
-    ANNOTATE("RPL: Preferred parent update, rank changed from %u to %u\n",
-  	(unsigned)old_rank, best_dag->rank);
+//    ANNOTATE("RPL: Preferred parent update, rank changed from %u to %u\n",
+//  	(unsigned)old_rank, best_dag->rank);
   }
   return best_dag;
 }
@@ -1075,9 +1075,9 @@ rpl_process_parent_event(rpl_instance_t *instance, rpl_parent_t *p)
     PRINTF("RPL: Moving in the instance from rank %u to %u\n",
 	   DAG_RANK(old_rank, instance), DAG_RANK(instance->current_dag->rank, instance));
     if(instance->current_dag->rank != INFINITE_RANK) {
-      PRINTF("RPL: The preferred parent is ");
+      printf("RPL: The preferred parent is %d", instance->current_dag->preferred_parent->addr.u8[15]);
       PRINT6ADDR(&instance->current_dag->preferred_parent->addr);
-      PRINTF(" (rank %u)\n",
+      printf(" (rank %u)\n",
            (unsigned)DAG_RANK(instance->current_dag->preferred_parent->rank, instance));
     } else {
       PRINTF("RPL: We don't have any parent");

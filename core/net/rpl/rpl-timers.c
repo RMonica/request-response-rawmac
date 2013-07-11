@@ -61,9 +61,9 @@ static struct ctimer periodic_timer;
 static void handle_periodic_timer(void *ptr);
 static void new_dio_interval(rpl_instance_t *instance);
 static void handle_dio_timer(void *ptr);
-#if SYNCHRO_CONTIKIMAC
-static void rpl_schedule_mac_phase_shift(void *ptr);
-#endif /* SYNCHRO_CONTIKIMAC */
+//#if SYNCHRO_CONTIKIMAC
+//static void rpl_schedule_mac_phase_shift(void *ptr);
+//#endif /* SYNCHRO_CONTIKIMAC */
 
 static uint16_t next_dis;
 
@@ -221,9 +221,9 @@ handle_dao_timer(void *ptr)
     PRINTF("RPL: handle_dao_timer - sending DAO\n");
     /* Set the route lifetime to the default value. */
     dao_output(instance->current_dag->preferred_parent, instance->default_lifetime);
-#if SYNCHRO_CONTIKIMAC
-    ctimer_set(&periodic_timer, CLOCK_SECOND, rpl_schedule_mac_phase_shift, instance);
-#endif /* SYNCHRO_CONTIKIMAC */
+//#if SYNCHRO_CONTIKIMAC
+//    ctimer_set(&periodic_timer, CLOCK_SECOND, rpl_schedule_mac_phase_shift, instance);
+//#endif /* SYNCHRO_CONTIKIMAC */
   } else {
     PRINTF("RPL: No suitable DAO parent\n");
   }
@@ -249,17 +249,17 @@ rpl_schedule_dao(rpl_instance_t *instance)
   }
 }
 /*---------------------------------------------------------------------------*/
-#if SYNCHRO_CONTIKIMAC
-static void
-rpl_schedule_mac_phase_shift(void *ptr)
-{
-	rpl_instance_t *instance;
-	rimeaddr_t macaddr;
-
-	instance = (rpl_instance_t *)ptr;
-	uip_ds6_get_addr_iid(&(instance->current_dag->preferred_parent->addr),(uip_lladdr_t *)&macaddr);
-	contikimac_set_phase_for_routing(&macaddr);
-//	PRINTF("RPL: contikimac_set_phase_for_routing\n");
-}
-#endif /* SYNCHRO_CONTIKIMAC */
+//#if SYNCHRO_CONTIKIMAC
+//static void
+//rpl_schedule_mac_phase_shift(void *ptr)
+//{
+//	rpl_instance_t *instance;
+//	rimeaddr_t macaddr;
+//
+//	instance = (rpl_instance_t *)ptr;
+//	uip_ds6_get_addr_iid(&(instance->current_dag->preferred_parent->addr),(uip_lladdr_t *)&macaddr);
+//	contikimac_set_phase_for_routing(&macaddr);
+////	PRINTF("RPL: contikimac_set_phase_for_routing\n");
+//}
+//#endif /* SYNCHRO_CONTIKIMAC */
 #endif /* UIP_CONF_IPV6 */

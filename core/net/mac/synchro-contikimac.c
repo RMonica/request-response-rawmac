@@ -57,6 +57,10 @@
 #include "sys/compower.h"
 #include "sys/pt.h"
 #include "sys/rtimer.h"
+// added by Pietro
+#include "net/rpl/rpl.h"
+#include "net/uip-ds6.h"
+#include "net/rime/rimeaddr.h"
 
 
 #include <string.h>
@@ -206,7 +210,7 @@ static int we_are_receiving_burst = 0;
 #define MAX_PHASE_STROBE_TIME              RTIMER_ARCH_SECOND / 60
 
 /* Pietro: PHASE_OFFSET should be greater or equal than 2*GUARD_TIME*/
-#define PHASE_OFFSET	2*GUARD_TIME
+#define PHASE_OFFSET	7*GUARD_TIME
 /* SHORTEST_PACKET_SIZE is the shortest packet that ContikiMAC
    allows. Packets have to be a certain size to be able to be detected
    by two consecutive CCA checks, and here is where we define this
@@ -685,8 +689,8 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
                      GUARD_TIME,
                      mac_callback, mac_callback_ptr, buf_list);
     if(ret == PHASE_DEFERRED) {
-    	 PRINTF("contikimac: send failed, MAC_TX_DEFERRED\n");
-      return MAC_TX_DEFERRED;
+    	PRINTF("contikimac: send failed, MAC_TX_DEFERRED\n");
+    	return MAC_TX_DEFERRED;
     }
     if(ret != PHASE_UNKNOWN) {
       is_known_receiver = 1;
@@ -779,12 +783,17 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
 
     watchdog_periodic();
 
-// Pietro: the following if statement could be removed
-/*    if(!is_broadcast && (is_receiver_awake || is_known_receiver) &&
+/* ***************************************************************************************************************************************
+ * Pietro: the following if statement stops the transmission after t0 + MAX_PHASE_STROBE_TIME, when the receiver is expected to be gone
+ * back asleep. This could be a problem with SynchroMAC in case the receiver has shifted the phase. The phase locking takes care of this.
+ * If the statement is disabled, packets are repeated for the entire cycle time, exhausting the channel capacity especially if the channel
+ * check rate is low.
+ *****************************************************************************************************************************************/
+    if(!is_broadcast && (is_receiver_awake || is_known_receiver) &&
        !RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + MAX_PHASE_STROBE_TIME)) {
       PRINTF("miss to %d\n", packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0]);
       break;
-    }*/
+    }
 
     len = 0;
 
@@ -885,6 +894,21 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
     if(collisions == 0 && is_receiver_awake == 0) {
       phase_update(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
 		   encounter_time, ret);
+      // Pietro: if the receiver is the RPL preferred parent of this node, shift the wake-up phase
+      {
+    	  rimeaddr_t rpl_parent_macaddr;
+    	  rpl_dag_t *dag;
+
+    	  dag = rpl_get_any_dag();
+    	  uip_ds6_get_addr_iid(&(dag->preferred_parent->addr),(uip_lladdr_t *)&rpl_parent_macaddr);
+    	  if(rimeaddr_cmp(&rpl_parent_macaddr, packetbuf_addr(PACKETBUF_ADDR_RECEIVER)) == 0 ) {
+    		  printf("synchromac: Receiver is not my RPL preferred parent\n");
+    	  } else {
+    		  //printf("synchromac: Receiver is my RPL preferred parent\n");
+    		  contikimac_set_phase_for_routing(&rpl_parent_macaddr);
+
+    	  }
+      }
     }
   }
 #endif /* WITH_PHASE_OPTIMIZATION */
@@ -1024,7 +1048,7 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 		//PRINTF("contikimac: cycle_start %u, cycle_offset %u, CYCLE_TIME %u\n", cycle_start, cycle_offset, CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_offset - cycle_start) mod CYCLE_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
-		if((cycle_offset - cycle_start) % CYCLE_TIME < PHASE_OFFSET  || (cycle_offset - cycle_start) % CYCLE_TIME > (PHASE_OFFSET + 2*CCA_SLEEP_TIME)){
+		if((cycle_offset - cycle_start) % CYCLE_TIME < PHASE_OFFSET  || (cycle_offset - cycle_start) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME)){
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
 //			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
 			powercycle_turn_radio_off();
@@ -1033,7 +1057,7 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 		}
 	} else {
 		// TODO: wait until the phase is discovered and then shift
-		printf("The phase of %u is UNknown\n", addr->u8[7]);
+		//printf("The phase of %u is UNknown\n", addr->u8[7]);
 		return;
 	}
 
