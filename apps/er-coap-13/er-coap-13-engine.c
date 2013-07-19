@@ -103,8 +103,8 @@ coap_receive(void)
       /*TODO duplicates suppression, if required by application */
 
       PRINTF("  Parsed: v %u, t %u, tkl %u, c %u, mid %u\n", message->version, message->type, message->token_len, message->code, message->mid);
-      PRINTF("  URL: %.*s\n", message->uri_path_len, message->uri_path);
-      PRINTF("  Payload: %.*s\n", message->payload_len, message->payload);
+      PRINTF("  URL: %*s\n", message->uri_path_len, message->uri_path);
+      PRINTF("  Payload: %*s\n", message->payload_len, message->payload);
 
       /* Handle requests. */
       if (message->code >= COAP_GET && message->code <= COAP_DELETE)
