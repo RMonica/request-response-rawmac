@@ -1,0 +1,2 @@
+make unicast-sender.sky TARGET=sky DEFINES=NETSTACK_CONF_RDC=synchro_contikimac_driver
+make unicast-receiver.sky TARGET=sky DEFINES=NETSTACK_CONF_RDC=synchro_contikimac_driver
