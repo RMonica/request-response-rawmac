@@ -209,8 +209,18 @@ static int we_are_receiving_burst = 0;
    to a neighbor for which we have a phase lock. */
 #define MAX_PHASE_STROBE_TIME              RTIMER_ARCH_SECOND / 60
 
+#ifndef OPTIMIZE_TO_SINK
+#define OPTIMIZE_TO_SINK (1)
+#endif
+
+#if OPTIMIZE_TO_SINK
+#define PHASE_OFFSET_SIGN (-1)
+#else
+#define PHASE_OFFSET_SIGN (1)
+#endif
+
 /* Pietro: PHASE_OFFSET should be greater or equal than 2*GUARD_TIME*/
-#define PHASE_OFFSET	7*GUARD_TIME
+#define PHASE_OFFSET	(2*GUARD_TIME)
 /* SHORTEST_PACKET_SIZE is the shortest packet that ContikiMAC
    allows. Packets have to be a certain size to be able to be detected
    by two consecutive CCA checks, and here is where we define this
@@ -902,11 +912,11 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
     	  dag = rpl_get_any_dag();
     	  uip_ds6_get_addr_iid(&(dag->preferred_parent->addr),(uip_lladdr_t *)&rpl_parent_macaddr);
     	  if(rimeaddr_cmp(&rpl_parent_macaddr, packetbuf_addr(PACKETBUF_ADDR_RECEIVER)) == 0 ) {
-    		  printf("synchromac: Receiver is not my RPL preferred parent\n");
+
     	  } else {
     		  //printf("synchromac: Receiver is my RPL preferred parent\n");
     		  contikimac_set_phase_for_routing(&rpl_parent_macaddr);
-
+          //printf("synchromac: Receiver is my RPL preferred parent, phase changed\n");
     	  }
       }
     }
@@ -1052,7 +1062,7 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
 //			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
 			powercycle_turn_radio_off();
-			cycle_start = cycle_offset - PHASE_OFFSET;
+      cycle_start = cycle_offset + (PHASE_OFFSET_SIGN * PHASE_OFFSET);
 			//powercycle_turn_radio_on();
 		}
 	} else {
