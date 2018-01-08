@@ -269,7 +269,7 @@ extern rpl_instance_t *default_instance;
 /* ICMPv6 functions for RPL. */
 void dis_output(uip_ipaddr_t *addr);
 void dio_output(rpl_instance_t *, uip_ipaddr_t *uc_addr);
-void dao_output(rpl_parent_t *, uint8_t lifetime);
+void dao_output(rpl_parent_t *, uint8_t lifetime, uint8_t metric);
 void dao_ack_output(rpl_instance_t *, uip_ipaddr_t *, uint8_t);
 
 /* RPL logic functions. */
@@ -300,7 +300,7 @@ void rpl_recalculate_ranks(void);
 void rpl_remove_routes(rpl_dag_t *dag);
 void rpl_remove_routes_by_nexthop(uip_ipaddr_t *nexthop, rpl_dag_t *dag);
 uip_ds6_route_t *rpl_add_route(rpl_dag_t *dag, uip_ipaddr_t *prefix,
-                               int prefix_len, uip_ipaddr_t *next_hop);
+                               int prefix_len, uip_ipaddr_t *next_hop, int metric);
 void rpl_purge_routes(void);
 
 /* Objective function. */

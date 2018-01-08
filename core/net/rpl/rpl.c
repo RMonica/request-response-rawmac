@@ -148,13 +148,13 @@ rpl_remove_routes_by_nexthop(uip_ipaddr_t *nexthop, rpl_dag_t *dag)
 /*---------------------------------------------------------------------------*/
 uip_ds6_route_t *
 rpl_add_route(rpl_dag_t *dag, uip_ipaddr_t *prefix, int prefix_len,
-              uip_ipaddr_t *next_hop)
+              uip_ipaddr_t *next_hop, int metric)
 {
   uip_ds6_route_t *rep;
 
   rep = uip_ds6_route_lookup(prefix);
   if(rep == NULL) {
-    if((rep = uip_ds6_route_add(prefix, prefix_len, next_hop, 0)) == NULL) {
+    if((rep = uip_ds6_route_add(prefix, prefix_len, next_hop, metric)) == NULL) {
       PRINTF("RPL: No space for more route entries\n");
       return NULL;
     }

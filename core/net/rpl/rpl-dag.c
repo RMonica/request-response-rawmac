@@ -627,7 +627,7 @@ rpl_select_dag(rpl_instance_t *instance, rpl_parent_t *p)
     instance->current_dag->preferred_parent = NULL;
     if(instance->mop != RPL_MOP_NO_DOWNWARD_ROUTES && last_parent != NULL) {
       /* Send a No-Path DAO to the removed preferred parent. */
-      dao_output(last_parent, RPL_ZERO_LIFETIME);
+      dao_output(last_parent, RPL_ZERO_LIFETIME, 0);
     }
     return NULL;
   }
@@ -640,7 +640,7 @@ rpl_select_dag(rpl_instance_t *instance, rpl_parent_t *p)
     if(instance->mop != RPL_MOP_NO_DOWNWARD_ROUTES) {
       if(last_parent != NULL) {
         /* Send a No-Path DAO to the removed preferred parent. */
-        dao_output(last_parent, RPL_ZERO_LIFETIME);
+        dao_output(last_parent, RPL_ZERO_LIFETIME, 0);
       }
       /* The DAO parent set changed - schedule a DAO transmission. */
       RPL_LOLLIPOP_INCREMENT(instance->dtsn_out);
@@ -704,7 +704,7 @@ rpl_nullify_parent(rpl_dag_t *dag, rpl_parent_t *parent)
 	uip_ds6_defrt_rm(dag->instance->def_route);
         dag->instance->def_route = NULL;
       }
-      dao_output(parent, RPL_ZERO_LIFETIME);
+      dao_output(parent, RPL_ZERO_LIFETIME, 0);
     }
   }
 

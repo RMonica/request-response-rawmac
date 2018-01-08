@@ -610,9 +610,11 @@ dao_input(void)
   int len;
   int i;
   int learned_from;
+  int route_metric;
   rpl_parent_t *p;
 
   prefixlen = 0;
+  route_metric = 0;
 
   uip_ipaddr_copy(&dao_sender_addr, &UIP_IP_BUF->srcipaddr);
 
@@ -676,6 +678,8 @@ dao_input(void)
       pathcontrol = buffer[i + 3];
       pathsequence = buffer[i + 4];
       lifetime = buffer[i + 5];
+      route_metric = buffer[i + 6] + 1;
+      buffer[i + 6] = route_metric;
       /* The parent address is also ignored. */
       break;
     }
@@ -717,7 +721,7 @@ dao_input(void)
     }
   }
 
-  rep = rpl_add_route(dag, &prefix, prefixlen, &dao_sender_addr);
+  rep = rpl_add_route(dag, &prefix, prefixlen, &dao_sender_addr, route_metric);
   if(rep == NULL) {
     RPL_STAT(rpl_stats.mem_overflows++);
 //    PRINTF("RPL: Could not add a route after receiving a DAO\n");
@@ -742,7 +746,7 @@ dao_input(void)
 }
 /*---------------------------------------------------------------------------*/
 void
-dao_output(rpl_parent_t *n, uint8_t lifetime)
+dao_output(rpl_parent_t *n, uint8_t lifetime, uint8_t metric)
 {
   rpl_dag_t *dag;
   rpl_instance_t *instance;
@@ -797,11 +801,12 @@ dao_output(rpl_parent_t *n, uint8_t lifetime)
 
   /* Create a transit information sub-option. */
   buffer[pos++] = RPL_OPTION_TRANSIT;
-  buffer[pos++] = 4;
+  buffer[pos++] = 5;
   buffer[pos++] = 0; /* flags - ignored */
   buffer[pos++] = 0; /* path control - ignored */
   buffer[pos++] = 0; /* path seq - ignored */
   buffer[pos++] = lifetime;
+  buffer[pos++] = metric;
 
   PRINTF("RPL: Sending DAO with prefix ");
   PRINT6ADDR(&prefix);

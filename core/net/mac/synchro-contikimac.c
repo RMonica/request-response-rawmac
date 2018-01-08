@@ -234,6 +234,7 @@ static int we_are_receiving_burst = 0;
 #define SHORTEST_PACKET_SIZE               43
 #endif
 
+#define MIN_PHASE_OFFSET_FOR_MULTIPHASE (GUARD_TIME)
 
 #define ACK_LEN 3
 
@@ -388,6 +389,24 @@ powercycle_turn_radio_on(void)
   }
 }
 /*---------------------------------------------------------------------------*/
+static rtimer_clock_t multiphase_offset;
+static unsigned int multiphase_offsets_attempts;
+static unsigned int multiphase_offset_delay;
+static int multiphase_waiting_extra_offset;
+void contikimac_set_multiphase_offset(rtimer_clock_t offset, unsigned int delay, unsigned int attempts)
+{
+  multiphase_offset_delay = delay;
+  if (offset < MIN_PHASE_OFFSET_FOR_MULTIPHASE) {
+    multiphase_offset = offset;
+    multiphase_offsets_attempts = 0;
+  }
+  else {
+    multiphase_offset = offset;
+    multiphase_offsets_attempts = attempts;
+  }
+}
+
+/*---------------------------------------------------------------------------*/
 /* Function modified by RMonica
  * for patch "more efficent way to calculate wakeup time"
  */
@@ -420,6 +439,26 @@ powercycle(struct rtimer *t, void *ptr)
     static rtimer_clock_t t0;
     static uint8_t count;
 
+    if (multiphase_offset_delay > 0)
+      multiphase_offset_delay--;
+
+    if (!multiphase_offset_delay && multiphase_offsets_attempts > 0)
+    {
+      if (!multiphase_waiting_extra_offset)
+      {
+        cycle_start += multiphase_offset;
+        multiphase_waiting_extra_offset = 1;
+      }
+      else
+      {
+        cycle_start -= multiphase_offset;
+        multiphase_offsets_attempts--;
+        multiphase_waiting_extra_offset = 0;
+      }
+    }
+
+    if (!multiphase_waiting_extra_offset)
+    {
 #if SYNC_CYCLE_STARTS
 #if PRECISE_SYNC_CYCLE_STARTS
     /* Compute cycle start when RTIMER_ARCH_SECOND is not a multiple
@@ -447,6 +486,7 @@ powercycle(struct rtimer *t, void *ptr)
 #else  /* if !SYNC_CYCLE_STARTS */
     cycle_start += CYCLE_TIME;
 #endif /* SYNC_CYCLE_STARTS */
+    }
 
     packet_seen = 0;
 
@@ -1175,6 +1215,10 @@ init(void)
              (void (*)(struct rtimer *, void *))powercycle, NULL);
 
   contikimac_is_on = 1;
+
+  multiphase_offsets_attempts = 0;
+  multiphase_waiting_extra_offset = 0;
+  multiphase_offset_delay = 0;
 
 #if WITH_PHASE_OPTIMIZATION
   phase_init(&phase_list);
