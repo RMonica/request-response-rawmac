@@ -53,6 +53,8 @@
 #define SEND_INTERVAL		(60 * CLOCK_SECOND)
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
 
+#define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
+
 static struct simple_udp_connection unicast_connection;
 
 /*---------------------------------------------------------------------------*/
@@ -73,6 +75,8 @@ receiver(struct simple_udp_connection *c,
   printf("Sending unicast to ");
   uip_debug_ipaddr_print(sender_addr);
   printf("\n");
+  printf("control flow: %u\n",(unsigned int)(UIP_IP_BUF->tcflow));
+
   char buf[20];
   int i;
   for (i = 0; i < 20 && i < datalen; i++)
@@ -117,6 +121,7 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
 
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
+  unicast_connection.udp_conn->tcflow = 0b00001100;
 
   etimer_set(&periodic_timer, SEND_INTERVAL);
   while(1) {
