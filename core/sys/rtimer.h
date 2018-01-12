@@ -91,6 +91,7 @@ enum {
   RTIMER_ERR_FULL,
   RTIMER_ERR_TIME,
   RTIMER_ERR_ALREADY_SCHEDULED,
+  RTIMER_ERR_NO_TIMER,
 };
 
 /**
@@ -109,6 +110,9 @@ enum {
  */
 int rtimer_set(struct rtimer *task, rtimer_clock_t time,
 	       rtimer_clock_t duration, rtimer_callback_t func, void *ptr);
+
+int rtimer_move(struct rtimer *task, rtimer_clock_t time,
+                rtimer_clock_t duration, rtimer_callback_t func, void *ptr);
 
 /**
  * \brief      Execute the next real-time task and schedule the next task, if any

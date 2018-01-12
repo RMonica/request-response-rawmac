@@ -89,6 +89,23 @@ rtimer_set(struct rtimer *rtimer, rtimer_clock_t time,
   return RTIMER_OK;
 }
 /*---------------------------------------------------------------------------*/
+int rtimer_move(struct rtimer *rtimer, rtimer_clock_t time,
+                rtimer_clock_t duration,
+                rtimer_callback_t func, void *ptr)
+{
+  if(next_rtimer == NULL)
+    return RTIMER_ERR_NO_TIMER;
+
+  rtimer->func = func;
+  rtimer->ptr = ptr;
+
+  rtimer->time = time;
+  next_rtimer = rtimer;
+
+  rtimer_arch_schedule(time);
+  return RTIMER_OK;
+}
+/*---------------------------------------------------------------------------*/
 void
 rtimer_run_next(void)
 {

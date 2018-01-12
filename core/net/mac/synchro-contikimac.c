@@ -210,13 +210,7 @@ static int we_are_receiving_burst = 0;
 #define MAX_PHASE_STROBE_TIME              RTIMER_ARCH_SECOND / 60
 
 #ifndef OPTIMIZE_TO_SINK
-#define OPTIMIZE_TO_SINK (1)
-#endif
-
-#if OPTIMIZE_TO_SINK
-#define PHASE_OFFSET_SIGN (-1)
-#else
-#define PHASE_OFFSET_SIGN (1)
+#define OPTIMIZE_TO_SINK (0)
 #endif
 
 /* Pietro: PHASE_OFFSET should be greater or equal than 2*GUARD_TIME*/
@@ -365,6 +359,25 @@ schedule_powercycle_fixed(struct rtimer *t, rtimer_clock_t fixed_time)
 }
 /*---------------------------------------------------------------------------*/
 static void
+schedule_powercycle_fixed_move(struct rtimer *t, rtimer_clock_t fixed_time)
+{
+  int r;
+
+  if(contikimac_is_on) {
+
+    if(RTIMER_CLOCK_LT(fixed_time, RTIMER_NOW() + 1)) {
+      fixed_time = RTIMER_NOW() + 1;
+    }
+
+    r = rtimer_move(t, fixed_time, 1,
+                    (void (*)(struct rtimer *, void *))powercycle, NULL);
+    if(r != RTIMER_OK) {
+      PRINTF("schedule_powercycle: could not set rtimer\n");
+    }
+  }
+}
+/*---------------------------------------------------------------------------*/
+static void
 powercycle_turn_radio_off(void)
 {
 #if CONTIKIMAC_CONF_COMPOWER
@@ -393,17 +406,46 @@ static rtimer_clock_t multiphase_offset;
 static unsigned int multiphase_offsets_attempts;
 static unsigned int multiphase_offset_delay;
 static int multiphase_waiting_extra_offset;
-void contikimac_set_multiphase_offset(rtimer_clock_t offset, unsigned int delay, unsigned int attempts)
+static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsigned int delay, unsigned int attempts)
 {
+  if (!attempts)
+    return;
+
   multiphase_offset_delay = delay;
   if (offset < MIN_PHASE_OFFSET_FOR_MULTIPHASE) {
     multiphase_offset = offset;
     multiphase_offsets_attempts = 0;
+    return;
   }
-  else {
-    multiphase_offset = offset;
-    multiphase_offsets_attempts = attempts;
+
+  multiphase_offset = offset;
+  multiphase_offsets_attempts = attempts;
+
+  rtimer_clock_t now = RTIMER_NOW();
+  rtimer_clock_t next_cycle_start = cycle_start + CYCLE_TIME;
+  rtimer_clock_t maybe_next_wakeup = cycle_start + offset;
+  printf("now: %u maybe_next_offset %u cycle_start %u\n", (unsigned int)now,
+         (unsigned int)maybe_next_wakeup, (unsigned int)next_cycle_start);
+  if (!multiphase_offset_delay && RTIMER_CLOCK_LT(now, maybe_next_wakeup) &&
+                                  RTIMER_CLOCK_LT(maybe_next_wakeup + GUARD_TIME, next_cycle_start))
+  {
+    schedule_powercycle_fixed_move(&rt, maybe_next_wakeup);
+    multiphase_waiting_extra_offset = 1;
+    cycle_start += multiphase_offset;
+    cycle_start -= CYCLE_TIME;
+    printf("scheduled at %u\n", (unsigned int)maybe_next_wakeup);
   }
+}
+
+void synchro_contikimac_schedule_from_metric(unsigned int metric)
+{
+  if (!metric)
+    return;
+  long unsigned int travel_delay = (long unsigned int)(metric) * (PHASE_OFFSET * 2 + GUARD_TIME);
+  unsigned int cycles = travel_delay / CYCLE_TIME;
+  unsigned int offset = travel_delay % CYCLE_TIME;
+  printf("cycles: %u offset: %u/%u\n",cycles,offset,(unsigned int)CYCLE_TIME);
+  synchro_contikimac_set_multiphase_offset(offset,cycles,10);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -439,15 +481,18 @@ powercycle(struct rtimer *t, void *ptr)
     static rtimer_clock_t t0;
     static uint8_t count;
 
-    if (multiphase_offset_delay > 0)
+    if (!multiphase_waiting_extra_offset && multiphase_offset_delay > 0)
       multiphase_offset_delay--;
 
-    if (!multiphase_offset_delay && multiphase_offsets_attempts > 0)
+    if (multiphase_offsets_attempts > 0)
     {
       if (!multiphase_waiting_extra_offset)
       {
-        cycle_start += multiphase_offset;
-        multiphase_waiting_extra_offset = 1;
+        if (!multiphase_offset_delay)
+        {
+          cycle_start += multiphase_offset;
+          multiphase_waiting_extra_offset = 1;
+        }
       }
       else
       {
@@ -1098,11 +1143,22 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr)
 		//PRINTF("contikimac: cycle_start %u, cycle_offset %u, CYCLE_TIME %u\n", cycle_start, cycle_offset, CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_offset - cycle_start) mod CYCLE_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
-		if((cycle_offset - cycle_start) % CYCLE_TIME < PHASE_OFFSET  || (cycle_offset - cycle_start) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME)){
+#if OPTIMIZE_TO_SINK
+    if((cycle_offset - cycle_start) % CYCLE_TIME < (PHASE_OFFSET - GUARD_TIME/2)  || (cycle_offset - cycle_start) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME/2)){
+#else
+    if((cycle_start - cycle_offset) % CYCLE_TIME < (PHASE_OFFSET - GUARD_TIME/2)  || (cycle_start - cycle_offset) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME/2)){
+#endif
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
 //			printf("contikimac: Shifting phase from %u to %u\n", cycle_start, cycle_offset - 2*GUARD_TIME);
 			powercycle_turn_radio_off();
-      cycle_start = cycle_offset + (PHASE_OFFSET_SIGN * PHASE_OFFSET);
+#if OPTIMIZE_TO_SINK
+      if (cycle_offset >= PHASE_OFFSET)
+        cycle_start = cycle_offset - PHASE_OFFSET;
+      else
+        cycle_start = cycle_offset + (CYCLE_TIME - PHASE_OFFSET);
+#else
+      cycle_start = (cycle_offset + PHASE_OFFSET) % CYCLE_TIME;
+#endif
 			//powercycle_turn_radio_on();
 		}
 	} else {

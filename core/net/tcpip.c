@@ -583,8 +583,21 @@ tcpip_ipv6_output(void)
           uip_len = 0;
           return;
         }
+        printf("next hop defrt: ");
+        if (nexthop)
+          uip_debug_ipaddr_print(nexthop);
+        printf("\n");
       } else {
-	nexthop = &locrt->nexthop;
+        nexthop = &locrt->nexthop;
+/* ********************************** */
+        if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100) // a request and not a response
+        {
+          printf("next hop: ");
+          uip_debug_ipaddr_print(nexthop);
+          printf(" metric: %u\n",(unsigned int)(locrt->metric));
+          synchro_contikimac_schedule_from_metric(locrt->metric);
+        }
+/* ********************************** */
       }
 #if TCPIP_CONF_ANNOTATE_TRANSMISSIONS
       if(nexthop != NULL) {

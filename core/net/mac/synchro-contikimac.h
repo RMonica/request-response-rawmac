@@ -46,7 +46,7 @@
 
 extern const struct rdc_driver synchro_contikimac_driver;
 
-void contikimac_set_multiphase_offset(rtimer_clock_t offset,unsigned int delay,unsigned int attempts);
+void synchro_contikimac_schedule_from_metric(unsigned int metric);
 
 //void contikimac_set_phase(rimeaddr_t *);
 
