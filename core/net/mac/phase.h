@@ -62,12 +62,14 @@ struct phase {
   struct phase *next;
   rimeaddr_t neighbor;
   rtimer_clock_t time;
-  rtimer_cycle_time_t cycle_time; // cycle time of the node (may differ from that of this node)
+  rtimer_cycle_time_t cycle_time; // cycle time of the node (may differ from this node)
 #if PHASE_DRIFT_CORRECT
   rtimer_clock_t drift;
 #endif
   uint8_t noacks;
   struct timer noacks_timer;
+  uint8_t in_multiphase_state;
+  struct timer in_multiphase_state_expire;
 };
 
 struct phase_list {
@@ -93,6 +95,8 @@ phase_status_t phase_wait(struct phase_list *list,  const rimeaddr_t *neighbor,
                           struct rdc_buf_list *buf_list);
 void phase_update(const struct phase_list *list, const rimeaddr_t *neighbor,
                   rtimer_clock_t time, int mac_status);
+void phase_set_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor, int expected_expire);
+int phase_is_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor);
 
 void phase_remove(const struct phase_list *list, const rimeaddr_t *neighbor);
 

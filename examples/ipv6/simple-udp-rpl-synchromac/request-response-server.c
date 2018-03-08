@@ -42,7 +42,8 @@
 #include "sys/node-id.h"
 
 #include "simple-udp.h"
-#include "servreg-hack.h"
+
+#include "powertrace.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -109,13 +110,9 @@ set_global_address(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(unicast_sender_process, ev, data)
 {
-  static struct etimer periodic_timer;
-  static struct etimer send_timer;
-  uip_ipaddr_t *addr;
-
   PROCESS_BEGIN();
 
-  servreg_hack_init();
+  //powertrace_start(CLOCK_SECOND * 60);
 
   set_global_address();
 
@@ -123,32 +120,8 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
                       NULL, UDP_PORT, receiver);
   unicast_connection.udp_conn->tcflow = 0b00001100;
 
-  etimer_set(&periodic_timer, SEND_INTERVAL);
   while(1) {
     PROCESS_WAIT_EVENT();
-
-    //PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&periodic_timer));
-    //etimer_reset(&periodic_timer);
-   // etimer_set(&send_timer, SEND_TIME);
-
-   // PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
-   // rpl_dag_t * dag = rpl_get_any_dag();
-   // if (!dag) {
-  //    printf("No dag.");
-   //   continue;
-  //  }
-
-  //  addr = &(dag->dag_id);
-
-  //  static unsigned int message_number;
-   // char buf[20];
-
-    //printf("Sending unicast to ");
-    //uip_debug_ipaddr_print(addr);
-    //printf("\n");
-    //sprintf(buf, "Message %d", message_number);
-    //message_number++;
-    //simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, addr);
   }
 
   PROCESS_END();

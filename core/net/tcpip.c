@@ -41,6 +41,7 @@
 #include "contiki-net.h"
 #include "net/uip-split.h"
 #include "net/uip-packetqueue.h"
+#include "net/mac/synchro-contikimac.h"
 
 #if UIP_CONF_IPV6
 #include "net/uip-nd6.h"
@@ -181,6 +182,17 @@ check_for_tcp_syn(void)
 static void
 packet_input(void)
 {
+  if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100)
+  {
+    printf("packet input with flow 4:");
+    rimeaddr_t * sender = packetbuf_addr(PACKETBUF_ADDR_SENDER);
+    synchro_contikimac_set_in_multiphase(sender,RTIMER_ARCH_SECOND);
+#define MY_PRINTADDR(addr) printf(" %02x%02x:%02x%02x:%02x%02x:%02x%02x ", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7])
+    MY_PRINTADDR(sender);
+#undef MY_PRINTADDR
+    printf("\n");
+  }
+
 #if UIP_CONF_IP_FORWARD
   if(uip_len > 0) {
     tcpip_is_forwarding = 1;
@@ -583,10 +595,14 @@ tcpip_ipv6_output(void)
           uip_len = 0;
           return;
         }
-        printf("next hop defrt: ");
-        if (nexthop)
-          uip_debug_ipaddr_print(nexthop);
-        printf("\n");
+/* ********************************** */
+        if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00001100) {
+          printf("ignore phase for: ");
+          if (nexthop)
+            uip_debug_ipaddr_print(nexthop);
+          printf("\n");
+        }
+/* ********************************** */
       } else {
         nexthop = &locrt->nexthop;
 /* ********************************** */

@@ -39,7 +39,8 @@
 #include "net/uip-debug.h"
 
 #include "simple-udp.h"
-#include "servreg-hack.h"
+
+#include "powertrace.h"
 
 #include "net/rpl/rpl.h"
 
@@ -127,13 +128,11 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
 
   PROCESS_BEGIN();
 
-  servreg_hack_init();
-
   ipaddr = set_global_address();
 
   create_rpl_dag(ipaddr);
 
-  servreg_hack_register(SERVICE_ID, ipaddr);
+  //powertrace_start(CLOCK_SECOND * 60);
 
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
@@ -144,14 +143,14 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
 
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&init_timer));
 
-  static struct etimer periodic_timer;
-  etimer_set(&periodic_timer, SEND_INTERVAL);
+  //static struct etimer init_timer;
+  etimer_set(&init_timer, SEND_INTERVAL);
 
   static unsigned int current_selected_route = 0;
 
   while(1) {
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&periodic_timer));
-    etimer_reset(&periodic_timer);
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&init_timer));
+    etimer_reset(&init_timer);
 
     rpl_dag_t * dag = rpl_get_any_dag();
     if (!dag) {

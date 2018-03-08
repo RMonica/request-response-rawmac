@@ -1,6 +1,7 @@
-all: broadcast-example unicast-sender unicast-receiver request-response-server request-response-client
-APPS=servreg-hack
+all: broadcast-example request-response-server request-response-client
+APPS += powertrace
 CONTIKI=../../..
+APPS += servreg-hack
 
 WITH_UIP6=1
 UIP_CONF_IPV6=1

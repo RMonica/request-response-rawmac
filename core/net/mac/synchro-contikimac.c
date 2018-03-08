@@ -214,7 +214,7 @@ static int we_are_receiving_burst = 0;
 #endif
 
 /* Pietro: PHASE_OFFSET should be greater or equal than 2*GUARD_TIME*/
-#define PHASE_OFFSET	(2*GUARD_TIME)
+#define PHASE_OFFSET	(2*GUARD_TIME + GUARD_TIME / 4)
 /* SHORTEST_PACKET_SIZE is the shortest packet that ContikiMAC
    allows. Packets have to be a certain size to be able to be detected
    by two consecutive CCA checks, and here is where we define this
@@ -405,7 +405,7 @@ powercycle_turn_radio_on(void)
 static rtimer_clock_t multiphase_offset;
 static unsigned int multiphase_offsets_attempts;
 static unsigned int multiphase_offset_delay;
-static int multiphase_waiting_extra_offset;
+static uint8_t multiphase_waiting_extra_offset;
 static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsigned int delay, unsigned int attempts)
 {
   if (!attempts)
@@ -423,6 +423,10 @@ static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsi
 
   rtimer_clock_t now = RTIMER_NOW();
   rtimer_clock_t next_cycle_start = cycle_start + CYCLE_TIME;
+
+  if (!RTIMER_CLOCK_LT(now, cycle_start + PHASE_OFFSET))
+    multiphase_offset_delay++;
+
   rtimer_clock_t maybe_next_wakeup = cycle_start + offset;
   printf("now: %u maybe_next_offset %u cycle_start %u\n", (unsigned int)now,
          (unsigned int)maybe_next_wakeup, (unsigned int)next_cycle_start);
@@ -433,7 +437,6 @@ static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsi
     multiphase_waiting_extra_offset = 1;
     cycle_start += multiphase_offset;
     cycle_start -= CYCLE_TIME;
-    printf("scheduled at %u\n", (unsigned int)maybe_next_wakeup);
   }
 }
 
@@ -442,10 +445,16 @@ void synchro_contikimac_schedule_from_metric(unsigned int metric)
   if (!metric)
     return;
   long unsigned int travel_delay = (long unsigned int)(metric) * (PHASE_OFFSET * 2 + GUARD_TIME);
-  unsigned int cycles = travel_delay / CYCLE_TIME;
+  unsigned int cycle_offset = travel_delay / CYCLE_TIME;
   unsigned int offset = travel_delay % CYCLE_TIME;
-  printf("cycles: %u offset: %u/%u\n",cycles,offset,(unsigned int)CYCLE_TIME);
-  synchro_contikimac_set_multiphase_offset(offset,cycles,10);
+  printf("cycles: %u offset: %u/%u\n",cycle_offset,offset,(unsigned int)CYCLE_TIME);
+  unsigned int attempts = 3; // compute this from metric somehow?
+  synchro_contikimac_set_multiphase_offset(offset,cycle_offset,attempts);
+}
+
+void synchro_contikimac_set_in_multiphase(const rimeaddr_t *neighbor, int time)
+{
+  phase_set_in_multiphase(&phase_list,neighbor,time);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -482,24 +491,26 @@ powercycle(struct rtimer *t, void *ptr)
     static uint8_t count;
 
     if (!multiphase_waiting_extra_offset && multiphase_offset_delay > 0)
-      multiphase_offset_delay--;
-
-    if (multiphase_offsets_attempts > 0)
     {
-      if (!multiphase_waiting_extra_offset)
+      printf("multiphase_offset_delay dec from: %d\n",multiphase_offset_delay);
+      multiphase_offset_delay--;
+    }
+
+    if (!multiphase_waiting_extra_offset)
+    {
+      if (multiphase_offsets_attempts > 0 && !multiphase_offset_delay)
       {
-        if (!multiphase_offset_delay)
-        {
-          cycle_start += multiphase_offset;
-          multiphase_waiting_extra_offset = 1;
-        }
+        cycle_start += multiphase_offset;
+        multiphase_waiting_extra_offset = 1;
       }
-      else
-      {
-        cycle_start -= multiphase_offset;
+    }
+    else //if (multiphase_waiting_extra_offset)
+    {
+      cycle_start -= multiphase_offset;
+      if (multiphase_offsets_attempts) {
         multiphase_offsets_attempts--;
-        multiphase_waiting_extra_offset = 0;
       }
+      multiphase_waiting_extra_offset = 0;
     }
 
     if (!multiphase_waiting_extra_offset)
@@ -660,6 +671,10 @@ broadcast_rate_drop(void)
   return 0;
 #endif /* CONTIKIMAC_CONF_BROADCAST_RATE_LIMIT */
 }
+
+void
+contikimac_set_phase_for_routing(rimeaddr_t * addr); // forward
+
 /*---------------------------------------------------------------------------*/
 static int
 send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
@@ -784,8 +799,8 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
                      GUARD_TIME,
                      mac_callback, mac_callback_ptr, buf_list);
     if(ret == PHASE_DEFERRED) {
-    	PRINTF("contikimac: send failed, MAC_TX_DEFERRED\n");
-    	return MAC_TX_DEFERRED;
+      PRINTF("contikimac: send failed, MAC_TX_DEFERRED\n");
+      return MAC_TX_DEFERRED;
     }
     if(ret != PHASE_UNKNOWN) {
       is_known_receiver = 1;
@@ -1000,7 +1015,10 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
 
     	  } else {
     		  //printf("synchromac: Receiver is my RPL preferred parent\n");
-    		  contikimac_set_phase_for_routing(&rpl_parent_macaddr);
+          if (!phase_is_in_multiphase(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER)))
+            contikimac_set_phase_for_routing(&rpl_parent_macaddr);
+          else
+            printf("contikimac_set_phase_for_routing skipped because of multiphase\n");
           //printf("synchromac: Receiver is my RPL preferred parent, phase changed\n");
     	  }
       }
