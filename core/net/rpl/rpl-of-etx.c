@@ -279,8 +279,10 @@ update_metric_container(rpl_instance_t *instance)
 
   if(dag->rank == ROOT_RANK(instance)) {
     path_metric = 0;
+    instance->mc.distance_to_sink = 0;
   } else {
     path_metric = calculate_path_metric(dag->preferred_parent, AVG_DELAY_MAX_DELAY);
+    instance->mc.distance_to_sink = dag->preferred_parent->mc.distance_to_sink + 1;
   }
 
 #if RPL_DAG_MC == RPL_DAG_MC_ETX

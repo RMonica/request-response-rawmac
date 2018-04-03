@@ -103,6 +103,7 @@ struct rpl_metric_container {
   uint8_t length;
   /* field added by RMonica */
   uint16_t node_cycle_time;
+  uint8_t distance_to_sink;
   union metric_object {
     struct rpl_metric_object_energy energy;
     uint16_t etx;

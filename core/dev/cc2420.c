@@ -269,6 +269,7 @@ set_txpower(uint8_t power)
 /*---------------------------------------------------------------------------*/
 #define AUTOACK (1 << 4)
 #define ADR_DECODE (1 << 11)
+#define OUT_OF_PHASE_ACK (1 << 12)
 #define RXFIFO_PROTECTION (1 << 9)
 #define CORR_THR(n) (((n) & 0x1f) << 6)
 #define FIFOP_THR(n) ((n) & 0x7f)
@@ -337,6 +338,19 @@ cc2420_init(void)
 
   process_start(&cc2420_process, NULL);
   return 1;
+}
+/*---------------------------------------------------------------------------*/
+void cc2420_set_out_of_phase_ack(int is_out_of_phase)
+{
+  uint16_t reg = 0;
+  GET_LOCK();
+  if (is_out_of_phase)
+    reg |= OUT_OF_PHASE_ACK;
+  else
+    reg &= ~OUT_OF_PHASE_ACK;
+  reg |= AUTOACK | ADR_DECODE;
+  setreg(CC2420_MDMCTRL0, reg);
+  RELEASE_LOCK();
 }
 /*---------------------------------------------------------------------------*/
 static int

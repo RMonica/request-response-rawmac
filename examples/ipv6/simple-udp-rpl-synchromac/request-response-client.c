@@ -133,7 +133,7 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
 
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
-  //unicast_connection.udp_conn->tcflow = 0b00000100;
+  unicast_connection.udp_conn->tcflow = 0b00000100;
 
   static struct etimer init_timer;
   etimer_set(&init_timer, INIT_INTERVAL);

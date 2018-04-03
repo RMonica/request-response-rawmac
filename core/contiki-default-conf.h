@@ -203,7 +203,8 @@
    layer header). This can be increased for systems with larger packet
    sizes. */
 #ifndef SICSLOWPAN_CONF_MAC_MAX_PAYLOAD
-#define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD (127 - 25)
+//#define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD (127 - 25)
+#define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD (150 - 25)
 #endif /* SICSLOWPAN_CONF_MAC_MAX_PAYLOAD */
 
 /* SICSLOWPAN_CONF_COMPRESSION_THRESHOLD sets a lower threshold for

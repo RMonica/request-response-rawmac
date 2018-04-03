@@ -62,6 +62,7 @@ struct phase {
   struct phase *next;
   rimeaddr_t neighbor;
   rtimer_clock_t time;
+  rtimer_clock_t time2;
   rtimer_cycle_time_t cycle_time; // cycle time of the node (may differ from this node)
 #if PHASE_DRIFT_CORRECT
   rtimer_clock_t drift;
@@ -93,6 +94,8 @@ phase_status_t phase_wait(struct phase_list *list,  const rimeaddr_t *neighbor,
                           rtimer_clock_t wait_before,
                           mac_callback_t mac_callback, void *mac_callback_ptr,
                           struct rdc_buf_list *buf_list);
+void phase_update2(const struct phase_list *list, const rimeaddr_t *neighbor,
+                  rtimer_clock_t time, rtimer_clock_t * time2, int mac_status);
 void phase_update(const struct phase_list *list, const rimeaddr_t *neighbor,
                   rtimer_clock_t time, int mac_status);
 void phase_set_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor, int expected_expire);
@@ -105,6 +108,8 @@ void phase_remove(const struct phase_list *list, const rimeaddr_t *neighbor);
  */
 rtimer_cycle_time_t phase_get_average_delay(const struct phase_list *list, const rimeaddr_t *neighbor,
                                        rtimer_clock_t guard_time, rtimer_clock_t my_phase);
+
+rtimer_clock_t phase_get_neighbor_phase(const struct phase_list *list, const rimeaddr_t *neighbor);
 
 /* Function added by RMonica
  * see implementation (phase.c)

@@ -115,6 +115,7 @@ void
 init_single_phase(struct phase * e)
 {
   e->time = UNKNOWN_TIME;
+  e->time2 = UNKNOWN_TIME;
 #if PHASE_DRIFT_CORRECT
   e->drift = 0;
 #endif
@@ -134,9 +135,15 @@ phase_remove(const struct phase_list *list, const rimeaddr_t *neighbor)
   }
 }
 /*---------------------------------------------------------------------------*/
+void phase_update(const struct phase_list *list, const rimeaddr_t *neighbor,
+                  rtimer_clock_t time, int mac_status)
+{
+  phase_update2(list,neighbor,time,NULL,mac_status);
+}
+
 void
-phase_update(const struct phase_list *list,
-             const rimeaddr_t *neighbor, rtimer_clock_t time,
+phase_update2(const struct phase_list *list,
+             const rimeaddr_t *neighbor, rtimer_clock_t time, rtimer_clock_t * time2,
              int mac_status)
 {
   struct phase *e;
@@ -146,18 +153,17 @@ phase_update(const struct phase_list *list,
 // because number greater than RTIMER_ARCH_SECOND are special values (UNKNOWN_TIME and so on)
 #if RTIMER_ARCH_SECOND & (RTIMER_ARCH_SECOND - 1)
   time %= RTIMER_ARCH_SECOND;
+  if (time2)
+    (*time2) %= RTIMER_ARCH_SECOND;
 #else
   time &= RTIMER_ARCH_SECOND - 1;
+  if (time2)
+    (*time2) &= RTIMER_ARCH_SECOND - 1;
 #endif
 
   /* If we have an entry for this neighbor already, we renew it. */
   e = find_neighbor(list, neighbor);
   if (e != NULL && e->in_multiphase_state && !timer_expired(&e->in_multiphase_state_expire)) {
-    printf("phase update for neighbor ");
-#define MY_PRINTADDR(addr) printf(" %02x%02x:%02x%02x:%02x%02x:%02x%02x ", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7])
-    MY_PRINTADDR(neighbor);
-#undef MY_PRINTADDR
-    printf(" cancelled because of multiphase\n");
     return; // do not update while in multiphase
   }
 
@@ -167,6 +173,8 @@ phase_update(const struct phase_list *list,
       e->drift = time-e->time;
 #endif
       e->time = time;
+      if (time2)
+        e->time2 = (*time2);
     }
     /* If the neighbor didn't reply to us, it may have switched
        phase (rebooted). We try a number of transmissions to it
@@ -199,6 +207,8 @@ phase_update(const struct phase_list *list,
       rimeaddr_copy(&e->neighbor, neighbor);
       init_single_phase(e);
       e->time = time;
+      if (time2)
+        e->time2 = (*time2);
       list_push(*list->list, e);
     }
   }
@@ -429,7 +439,7 @@ phase_wait(struct phase_list *list,
   }
 
   if(e != NULL && (e->cycle_time != UNKNOWN_CYCLE_TIME) && (e->time < RTIMER_ARCH_SECOND)) {
-    rtimer_clock_t wait, now, expected, sync;
+    rtimer_clock_t wait, wait2, now, expected, sync;
     clock_time_t ctimewait;
     
     /* We expect phases to happen every CYCLE_TIME time
@@ -472,6 +482,25 @@ phase_wait(struct phase_list *list,
 
     if(wait < guard_time) {
       wait += e->cycle_time;
+    }
+
+    if (e->time2 != UNKNOWN_TIME)
+    {
+      /* Check if cycle_time is a power of two */
+      if(!(e->cycle_time & (e->cycle_time - 1))) {
+        /* Faster if cycle_time is a power of two */
+        wait2 = (rtimer_clock_t)((e->time2 - now) & (e->cycle_time - 1));
+      } else {
+        /* Works generally */
+        wait2 = e->cycle_time - ((rtimer_clock_t)(now - e->time2) % e->cycle_time);
+      }
+
+      if(wait2 < guard_time) {
+        wait2 += e->cycle_time;
+      }
+
+      if (wait2 < wait)
+        wait = wait2;
     }
 
     ctimewait = (CLOCK_SECOND * (wait - guard_time)) / RTIMER_ARCH_SECOND;
