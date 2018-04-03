@@ -185,8 +185,19 @@ packet_input(void)
   if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100)
   {
     printf("packet input with flow 4:");
-    rimeaddr_t * sender = packetbuf_addr(PACKETBUF_ADDR_SENDER);
-    synchro_contikimac_set_in_multiphase(sender,RTIMER_ARCH_SECOND);
+    const rimeaddr_t * sender = packetbuf_addr(PACKETBUF_ADDR_SENDER);
+    synchro_contikimac_set_in_multiphase_once(sender);
+#define MY_PRINTADDR(addr) printf(" %02x%02x:%02x%02x:%02x%02x:%02x%02x ", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7])
+    MY_PRINTADDR(sender);
+#undef MY_PRINTADDR
+    printf("\n");
+  }
+
+  if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00001100)
+  {
+    printf("packet input with flow 12:");
+    const rimeaddr_t * sender = packetbuf_addr(PACKETBUF_ADDR_SENDER);
+    synchro_contikimac_unschedule_from_metric();
 #define MY_PRINTADDR(addr) printf(" %02x%02x:%02x%02x:%02x%02x:%02x%02x ", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7])
     MY_PRINTADDR(sender);
 #undef MY_PRINTADDR
@@ -595,22 +606,10 @@ tcpip_ipv6_output(void)
           uip_len = 0;
           return;
         }
-/* ********************************** */
-        if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00001100) {
-          printf("ignore phase for: ");
-          if (nexthop)
-            uip_debug_ipaddr_print(nexthop);
-          printf("\n");
-        }
-/* ********************************** */
       } else {
         nexthop = &locrt->nexthop;
 /* ********************************** */
-        if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100) // a request and not a response
-        {
-          printf("next hop: ");
-          uip_debug_ipaddr_print(nexthop);
-          printf(" metric: %u\n",(unsigned int)(locrt->metric));
+        if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100) { // a request and not a response
           synchro_contikimac_schedule_from_metric(locrt->metric);
         }
 /* ********************************** */
