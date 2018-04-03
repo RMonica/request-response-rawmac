@@ -71,18 +71,20 @@ receiver(struct simple_udp_connection *c,
          const uint8_t *data,
          uint16_t datalen)
 {
-  printf("Data received on port %d from port %d with length %d\n",
-         receiver_port, sender_port, datalen);
-  printf("Sending unicast to ");
+  printf("server: request received on port %d from port %d with length %d control flow %d ",
+         (int)receiver_port, (int)sender_port, (int)datalen, (int)(UIP_IP_BUF->tcflow));
+  printf("source ");
   uip_debug_ipaddr_print(sender_addr);
-  printf("\n");
-  printf("control flow: %u\n",(unsigned int)(UIP_IP_BUF->tcflow));
+  printf(" ");
+
+  if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100) {
+    unicast_connection.udp_conn->tcflow = 0b00001100;
+  }
 
   char buf[20];
-  int i;
-  for (i = 0; i < 20 && i < datalen; i++)
-    buf[i] = data[i];
+  memcpy(buf,data,(datalen < 20 ? datalen : 20));
   buf[19] = 0;
+  printf("content '%s'\n",buf);
   simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, sender_addr);
 }
 /*---------------------------------------------------------------------------*/
@@ -112,13 +114,10 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
 {
   PROCESS_BEGIN();
 
-  //powertrace_start(CLOCK_SECOND * 60);
-
   set_global_address();
 
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
-  unicast_connection.udp_conn->tcflow = 0b00001100;
 
   while(1) {
     PROCESS_WAIT_EVENT();

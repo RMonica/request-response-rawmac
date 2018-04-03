@@ -51,8 +51,8 @@
 #define SERVICE_ID 190
 
 #define INIT_INTERVAL   (60 * CLOCK_SECOND)
-#define SEND_INTERVAL		(10 * CLOCK_SECOND)
-#define SEND_TIME		(random_rand() % (SEND_INTERVAL))
+#define SEND_INTERVAL		(4 * CLOCK_SECOND)
+#define SEND_TIME		(SEND_INTERVAL + random_rand() % CLOCK_SECOND)
 
 #define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
 
@@ -71,11 +71,10 @@ receiver(struct simple_udp_connection *c,
          const uint8_t *data,
          uint16_t datalen)
 {
-  printf("Data received from ");
+  printf("client: response received from ");
   uip_debug_ipaddr_print(sender_addr);
-  printf(" on port %d from port %d with length %d: '%s'\n",
-         receiver_port, sender_port, datalen, data);
-  printf("control flow: %u\n",(unsigned int)(UIP_IP_BUF->tcflow));
+  printf(" on port %d from port %d with length %d control flow %d content: '%s'\n",
+         receiver_port, sender_port, datalen,(int)(UIP_IP_BUF->tcflow), data);
 }
 /*---------------------------------------------------------------------------*/
 static uip_ipaddr_t *
@@ -132,11 +131,9 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
 
   create_rpl_dag(ipaddr);
 
-  //powertrace_start(CLOCK_SECOND * 60);
-
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
-  unicast_connection.udp_conn->tcflow = 0b00000100;
+  //unicast_connection.udp_conn->tcflow = 0b00000100;
 
   static struct etimer init_timer;
   etimer_set(&init_timer, INIT_INTERVAL);
@@ -144,7 +141,7 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&init_timer));
 
   //static struct etimer init_timer;
-  etimer_set(&init_timer, SEND_INTERVAL);
+  etimer_set(&init_timer, SEND_TIME);
 
   static unsigned int current_selected_route = 0;
 
@@ -160,7 +157,6 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
 
     uip_ds6_route_t * known_route = uip_ds6_route_list_head();
     unsigned int counter = current_selected_route;
-    printf("Selecting route %u\n",current_selected_route);
     while (known_route && counter)
     {
       counter--;
@@ -169,21 +165,20 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
     if (!known_route)
     {
       current_selected_route = 0; // reached end, reset
-      printf("Sent to all routes (counter %u), resetting counter.\n",counter);
+      printf("client: sent to all routes (counter %u), resetting counter.\n",counter);
       continue;
     }
     current_selected_route++;
-
-    printf("Route length: %u\n",(unsigned int)(known_route->metric));
+    printf("client: selecting route %u\n",current_selected_route);
 
     uip_ipaddr_t * addr = &(known_route->ipaddr);
 
     static unsigned int message_number;
     char buf[20];
-    printf("Sending unicast to ");
+    printf("client: sending request to ");
     uip_debug_ipaddr_print(addr);
-    printf("\n");
     sprintf(buf, "Message %d", message_number);
+    printf(" length %d content '%s'\n",(int)(known_route->metric),buf);
     message_number++;
     simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, addr);
   }
