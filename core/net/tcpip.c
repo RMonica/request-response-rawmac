@@ -186,22 +186,22 @@ packet_input(void)
   {
     printf("packet input with flow 4:");
     const rimeaddr_t * sender = packetbuf_addr(PACKETBUF_ADDR_SENDER);
-    synchro_contikimac_set_in_multiphase_once(sender);
 #define MY_PRINTADDR(addr) printf(" %02x%02x:%02x%02x:%02x%02x:%02x%02x ", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7])
     MY_PRINTADDR(sender);
 #undef MY_PRINTADDR
     printf("\n");
+    synchro_contikimac_set_in_multiphase_once(sender);
   }
 
   if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00001100)
   {
     printf("packet input with flow 12:");
     const rimeaddr_t * sender = packetbuf_addr(PACKETBUF_ADDR_SENDER);
-    synchro_contikimac_unschedule_from_metric();
 #define MY_PRINTADDR(addr) printf(" %02x%02x:%02x%02x:%02x%02x:%02x%02x ", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7])
     MY_PRINTADDR(sender);
 #undef MY_PRINTADDR
     printf("\n");
+    synchro_contikimac_unschedule_from_metric();
   }
 
 #if UIP_CONF_IP_FORWARD

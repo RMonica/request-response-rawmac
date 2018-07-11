@@ -198,6 +198,7 @@ status(void)
 }
 /*---------------------------------------------------------------------------*/
 static uint8_t locked, lock_on, lock_off;
+static uint8_t ack_oop_on, ack_oop_off; // ack out of phase system
 
 static void
 on(void)
@@ -227,6 +228,19 @@ off(void)
     flushrx();
   }
 }
+
+#define OUT_OF_PHASE_ACK (1 << 12)
+static unsigned getreg(enum cc2420_register regname);
+static void setreg(enum cc2420_register regname, unsigned value);
+static void cc2420_set_out_of_phase_ack_locked(int is_out_of_phase)
+{
+  uint16_t reg = getreg(CC2420_MDMCTRL0);
+  if (is_out_of_phase)
+    reg |= OUT_OF_PHASE_ACK;
+  else
+    reg &= ~OUT_OF_PHASE_ACK;
+  setreg(CC2420_MDMCTRL0, reg);
+}
 /*---------------------------------------------------------------------------*/
 #define GET_LOCK() locked++
 static void RELEASE_LOCK(void) {
@@ -238,6 +252,17 @@ static void RELEASE_LOCK(void) {
     if(lock_off) {
       off();
       lock_off = 0;
+    }
+    // out of phase ack subsystem
+    if (ack_oop_on)
+    {
+      cc2420_set_out_of_phase_ack_locked(1);
+      ack_oop_on = 0;
+    }
+    if (ack_oop_off)
+    {
+      cc2420_set_out_of_phase_ack_locked(0);
+      ack_oop_off = 0;
     }
   }
   locked--;
@@ -269,7 +294,6 @@ set_txpower(uint8_t power)
 /*---------------------------------------------------------------------------*/
 #define AUTOACK (1 << 4)
 #define ADR_DECODE (1 << 11)
-#define OUT_OF_PHASE_ACK (1 << 12)
 #define RXFIFO_PROTECTION (1 << 9)
 #define CORR_THR(n) (((n) & 0x1f) << 6)
 #define FIFOP_THR(n) ((n) & 0x7f)
@@ -336,20 +360,24 @@ cc2420_init(void)
 
   flushrx();
 
+  ack_oop_on = 0;
+  ack_oop_off = 0;
+  locked = 0;
+
   process_start(&cc2420_process, NULL);
   return 1;
 }
 /*---------------------------------------------------------------------------*/
 void cc2420_set_out_of_phase_ack(int is_out_of_phase)
 {
-  uint16_t reg = 0;
+  if (locked)
+  {
+    ack_oop_on = !!is_out_of_phase;
+    ack_oop_off = !is_out_of_phase;
+    return;
+  }
   GET_LOCK();
-  if (is_out_of_phase)
-    reg |= OUT_OF_PHASE_ACK;
-  else
-    reg &= ~OUT_OF_PHASE_ACK;
-  reg |= AUTOACK | ADR_DECODE;
-  setreg(CC2420_MDMCTRL0, reg);
+  cc2420_set_out_of_phase_ack_locked(is_out_of_phase);
   RELEASE_LOCK();
 }
 /*---------------------------------------------------------------------------*/

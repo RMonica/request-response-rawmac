@@ -252,8 +252,8 @@ packet_sent(void *ptr, int status, int num_transmissions)
         if(backoff_transmissions > 3) {
           backoff_transmissions = 3;
         }
-        
-        time = time + (random_rand() % (backoff_transmissions * time));
+
+        time = time + (random_rand() % (backoff_transmissions * time * 4));
         
         if(n->transmissions < metadata->max_transmissions) {
           PRINTF("csma: retransmitting with time %lu %p\n", time, q);

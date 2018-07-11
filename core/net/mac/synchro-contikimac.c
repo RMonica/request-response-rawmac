@@ -215,7 +215,7 @@ static int we_are_receiving_burst = 0;
 #endif
 
 #ifndef BOTH_RAWMAC_LADDERS
-#define BOTH_RAWMAC_LADDERS (1)
+#define BOTH_RAWMAC_LADDERS (0)
 #endif
 
 #define MULTIPHASE_ATTEMPTS (10)
@@ -235,7 +235,7 @@ static int we_are_receiving_burst = 0;
 #define SHORTEST_PACKET_SIZE               43
 #endif
 
-#define MIN_PHASE_OFFSET_FOR_MULTIPHASE (INTER_PACKET_INTERVAL)
+#define MIN_PHASE_OFFSET_FOR_MULTIPHASE (GUARD_TIME)
 
 #define ACK_LEN 3
 
@@ -424,21 +424,27 @@ static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsi
   if (!attempts)
     return;
 
-  if (offset < MIN_PHASE_OFFSET_FOR_MULTIPHASE) {
+  if ((offset < MIN_PHASE_OFFSET_FOR_MULTIPHASE) || (CYCLE_TIME - offset < MIN_PHASE_OFFSET_FOR_MULTIPHASE)) {
     return;
   }
+
+  if (cycle_starts_mutex)
+    return;
+
+  cycle_starts_mutex = 1;
 
   multiphase_offset_delay = delay;
   multiphase_offset = offset;
   multiphase_offsets_attempts = attempts;
 
   rtimer_clock_t now = RTIMER_NOW();
-  rtimer_clock_t next_cycle_start = cycle_starts[cycle_starts_index] + CYCLE_TIME;
+  uint8_t prev_index = (cycle_starts_index + cycle_starts_num - 1) % cycle_starts_num;
+  rtimer_clock_t next_cycle_start = cycle_starts[prev_index] + CYCLE_TIME;
 
-  if (!RTIMER_CLOCK_LT(now, cycle_starts[cycle_starts_index] + PHASE_OFFSET))
+  if (!RTIMER_CLOCK_LT(now, cycle_starts[0] + PHASE_OFFSET))
     multiphase_offset_delay++;
 
-  rtimer_clock_t maybe_next_wakeup = cycle_starts[cycle_starts_index] + offset;
+  rtimer_clock_t maybe_next_wakeup = cycle_starts[0] + offset;
   //printf("now: %u maybe_next_offset %u cycle_start %u\n", (unsigned int)now,
   //       (unsigned int)maybe_next_wakeup, (unsigned int)next_cycle_start);
   if (!multiphase_offset_delay && RTIMER_CLOCK_LT(now, maybe_next_wakeup) &&
@@ -446,12 +452,14 @@ static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsi
   {
     schedule_powercycle_fixed_move(&rt, maybe_next_wakeup);
     multiphase_waiting_extra_offset = 1;
-    cycle_starts[cycle_starts_index] += multiphase_offset;
-    cycle_starts[cycle_starts_index] -= CYCLE_TIME;
+    cycle_starts[0] += multiphase_offset;
+    cycle_starts[0] -= CYCLE_TIME;
   }
+  cycle_starts_index = 0;
+
+  cycle_starts_mutex = 0;
 }
 
-static const rimeaddr_t * set_in_multiphase_neighbor;
 void synchro_contikimac_set_in_multiphase(const rimeaddr_t *neighbor, unsigned int time)
 {
   phase_set_in_multiphase(&phase_list,neighbor,time);
@@ -461,17 +469,11 @@ void synchro_contikimac_schedule_from_metric(unsigned int metric)
 {
   if (!metric)
     return;
-  long unsigned int travel_delay = (long unsigned int)(metric) * (PHASE_OFFSET * 2 + GUARD_TIME);
+  long unsigned int travel_delay = (long unsigned int)(metric) * (PHASE_OFFSET * 2) + 2 * GUARD_TIME;
   unsigned int cycle_offset = travel_delay / CYCLE_TIME;
   unsigned int offset = travel_delay % CYCLE_TIME;
   unsigned int attempts = MULTIPHASE_ATTEMPTS; // compute this from metric somehow?
   synchro_contikimac_set_multiphase_offset(offset,cycle_offset,attempts);
-
-  if (set_in_multiphase_neighbor)
-  {
-    const unsigned int time = (travel_delay + CYCLE_TIME * MULTIPHASE_ATTEMPTS) * CLOCK_SECOND / RTIMER_ARCH_SECOND;
-    synchro_contikimac_set_in_multiphase(set_in_multiphase_neighbor,time);
-  }
 }
 
 void synchro_contikimac_unschedule_from_metric()
@@ -481,9 +483,8 @@ void synchro_contikimac_unschedule_from_metric()
 
 void synchro_contikimac_set_in_multiphase_once(const rimeaddr_t *neighbor)
 {
-  const unsigned int time = (PHASE_OFFSET * 2 + CYCLE_TIME * MULTIPHASE_ATTEMPTS) * CLOCK_SECOND / RTIMER_ARCH_SECOND;
+  const unsigned int time = (PHASE_OFFSET * 2 + (long)CYCLE_TIME * MULTIPHASE_ATTEMPTS) * (long)CLOCK_SECOND / RTIMER_ARCH_SECOND;
   synchro_contikimac_set_in_multiphase(neighbor,time);
-  set_in_multiphase_neighbor = neighbor;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -538,13 +539,13 @@ powercycle(struct rtimer *t, void *ptr)
     {
       if (multiphase_offsets_attempts > 0 && !multiphase_offset_delay)
       {
-        cycle_starts[cycle_starts_index] += multiphase_offset;
+        cycle_starts[0] += multiphase_offset;
         multiphase_waiting_extra_offset = 1;
       }
     }
     else //if (multiphase_waiting_extra_offset)
     {
-      cycle_starts[cycle_starts_index] -= multiphase_offset;
+      cycle_starts[0] -= multiphase_offset;
       if (multiphase_offsets_attempts) {
         multiphase_offsets_attempts--;
       }
@@ -580,13 +581,16 @@ powercycle(struct rtimer *t, void *ptr)
 #else  /* if !SYNC_CYCLE_STARTS */
     cycle_start += CYCLE_TIME;
     cycle_starts[cycle_starts_index] += CYCLE_TIME;
-    if (!multiphase_offsets_attempts || multiphase_waiting_extra_offset) {
+    if (!multiphase_offsets_attempts) {
       cycle_starts_index++;
       if (cycle_starts_index >= cycle_starts_num)
         cycle_starts_index = 0;
     }
     else {
-      cycle_starts[(cycle_starts_index + 1) % 2] += CYCLE_TIME;
+      if (cycle_starts_num > 1) {
+        while (RTIMER_CLOCK_LT(cycle_starts[1],cycle_starts[0]))
+          cycle_starts[1] += CYCLE_TIME;
+      }
     }
 #endif /* SYNC_CYCLE_STARTS */
     }
@@ -1077,14 +1081,14 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
         encounter_time += 2 * PHASE_OFFSET * (rank - 1);
         phase_update2(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
           encounter_time, &other_time, ret);
-        printf("phase update out_of_phase rank %u\n",(unsigned)rank);
+        //printf("phase update out_of_phase rank %u\n",(unsigned)rank);
       }
       if (!ack_out_of_phase && rank)
       {
         rtimer_clock_t other_time = encounter_time - (2 * PHASE_OFFSET * (rank - 1));
         phase_update2(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
           encounter_time, &other_time, ret);
-        printf("phase update in_phase rank %u\n",(unsigned)rank);
+        //printf("phase update in_phase rank %u\n",(unsigned)rank);
       }
 #else
       phase_update(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
@@ -1273,9 +1277,9 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr,uint8_t rank)
 #endif
       while (RTIMER_CLOCK_LT(cycle_starts[1],cycle_starts[0]))
         cycle_starts[1] += CYCLE_TIME;
-      printf("rank: %u, cycle_phase_offset: %u, cycle start 0: %u, cycle start 1: %u, cycle_start_index: %u\n",
-             (unsigned)rank,(unsigned)cycle_phase_offset,(unsigned)(cycle_starts[0]),(unsigned)(cycle_starts[1]),
-             (unsigned)cycle_starts_index);
+      //printf("rank: %u, cycle_phase_offset: %u, cycle start 0: %u, cycle start 1: %u, cycle_start_index: %u\n",
+      //       (unsigned)rank,(unsigned)cycle_phase_offset,(unsigned)(cycle_starts[0]),(unsigned)(cycle_starts[1]),
+      //       (unsigned)cycle_starts_index);
 #if BOTH_RAWMAC_LADDERS
       cycle_starts_num = 2;
 #else

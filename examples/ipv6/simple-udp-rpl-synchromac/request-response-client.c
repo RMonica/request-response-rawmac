@@ -133,21 +133,20 @@ PROCESS_THREAD(unicast_receiver_process, ev, data)
 
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
-  unicast_connection.udp_conn->tcflow = 0b00000100;
+  //unicast_connection.udp_conn->tcflow = 0b00000100;
 
   static struct etimer init_timer;
   etimer_set(&init_timer, INIT_INTERVAL);
 
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&init_timer));
 
-  //static struct etimer init_timer;
-  etimer_set(&init_timer, SEND_TIME);
-
   static unsigned int current_selected_route = 0;
 
   while(1) {
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&init_timer));
-    etimer_reset(&init_timer);
+    static struct etimer send_timer;
+    etimer_set(&send_timer, SEND_TIME);
+
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
 
     rpl_dag_t * dag = rpl_get_any_dag();
     if (!dag) {

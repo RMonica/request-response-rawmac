@@ -165,6 +165,7 @@ rpl_add_route(rpl_dag_t *dag, uip_ipaddr_t *prefix, int prefix_len,
     PRINT6ADDR(next_hop);
     PRINTF("\n");
     uip_ipaddr_copy(&rep->nexthop, next_hop);
+    rep->metric = metric;
   }
   rep->state.dag = dag;
   rep->state.lifetime = RPL_LIFETIME(dag->instance, dag->instance->default_lifetime);
