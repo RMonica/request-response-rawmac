@@ -190,7 +190,6 @@ packet_input(void)
     MY_PRINTADDR(sender);
 #undef MY_PRINTADDR
     printf("\n");
-    synchro_contikimac_set_in_multiphase_once(sender);
   }
 
   if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00001100)

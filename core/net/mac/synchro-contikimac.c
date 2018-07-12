@@ -215,7 +215,7 @@ static int we_are_receiving_burst = 0;
 #endif
 
 #ifndef BOTH_RAWMAC_LADDERS
-#define BOTH_RAWMAC_LADDERS (0)
+#define BOTH_RAWMAC_LADDERS (1)
 #endif
 
 #define MULTIPHASE_ATTEMPTS (10)
@@ -460,11 +460,6 @@ static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsi
   cycle_starts_mutex = 0;
 }
 
-void synchro_contikimac_set_in_multiphase(const rimeaddr_t *neighbor, unsigned int time)
-{
-  phase_set_in_multiphase(&phase_list,neighbor,time);
-}
-
 void synchro_contikimac_schedule_from_metric(unsigned int metric)
 {
   if (!metric)
@@ -479,12 +474,6 @@ void synchro_contikimac_schedule_from_metric(unsigned int metric)
 void synchro_contikimac_unschedule_from_metric()
 {
   multiphase_offsets_attempts = 0;
-}
-
-void synchro_contikimac_set_in_multiphase_once(const rimeaddr_t *neighbor)
-{
-  const unsigned int time = (PHASE_OFFSET * 2 + (long)CYCLE_TIME * MULTIPHASE_ATTEMPTS) * (long)CLOCK_SECOND / RTIMER_ARCH_SECOND;
-  synchro_contikimac_set_in_multiphase(neighbor,time);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -699,10 +688,15 @@ powercycle(struct rtimer *t, void *ptr)
 #endif
     }
 
-    if (cycle_starts_index)
-      cc2420_set_out_of_phase_ack(1);
+    if (!multiphase_waiting_extra_offset)
+    {
+      if (cycle_starts_index)
+        cc2420_set_out_of_phase_ack(0b01);
+      else
+        cc2420_set_out_of_phase_ack(0b00);
+    }
     else
-      cc2420_set_out_of_phase_ack(0);
+      cc2420_set_out_of_phase_ack(0b10);
   }
 
   PT_END(&pt);
@@ -751,7 +745,8 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
   int ret;
   uint8_t contikimac_was_on;
   uint8_t seqno;
-  uint8_t ack_out_of_phase = 0;
+  uint8_t ack_reverse_phase = 0;
+  uint8_t ack_no_phase = 0;
 #if WITH_CONTIKIMAC_HEADER
   struct hdr *chdr;
 #endif /* WITH_CONTIKIMAC_HEADER */
@@ -851,7 +846,10 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
   /* Remove the MAC-layer header since it will be recreated next time around. */
   packetbuf_hdr_remove(hdrlen);
 
-  if(!is_broadcast && !is_receiver_awake) {
+  #define UIP_IP_BUF ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
+  uint8_t req_resp_is_resp = (UIP_IP_BUF->tcflow & 0b00001100) == 0b00001100;
+
+  if(!is_broadcast && !is_receiver_awake && !req_resp_is_resp) {
 #if WITH_PHASE_OPTIMIZATION
     ret = phase_wait(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
                      GUARD_TIME,
@@ -1005,7 +1003,8 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
         if(len == ACK_LEN && seqno == ackbuf[ACK_LEN - 1]) {
           got_strobe_ack = 1;
           encounter_time = txtime;
-          ack_out_of_phase = !!(ackbuf[0] & (1<<7)); // ACK_OUT_OF_PHASE = (1<<7)
+          ack_reverse_phase = !!(ackbuf[0] & (1<<7)); // ACK_OUT_OF_PHASE = (1<<7)
+          ack_no_phase = !!(ackbuf[0] & (1<<5));      // using ACK_REQUEST = (1<<5)
           break;
         } else {
           PRINTF("contikimac: collisions while sending\n");
@@ -1059,7 +1058,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
   }
 
   if(!is_broadcast) {
-    if(collisions == 0 && is_receiver_awake == 0 && got_strobe_ack) {
+    if(collisions == 0 && is_receiver_awake == 0 && got_strobe_ack && !ack_no_phase) {
 
 #if BOTH_RAWMAC_LADDERS
       unsigned int rank = 2; // all nodes connected to root node have rank 2
@@ -1075,7 +1074,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
         }
       }
 
-      if (ack_out_of_phase && rank)
+      if (ack_reverse_phase && rank)
       {
         rtimer_clock_t other_time = encounter_time;
         encounter_time += 2 * PHASE_OFFSET * (rank - 1);
@@ -1083,7 +1082,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
           encounter_time, &other_time, ret);
         //printf("phase update out_of_phase rank %u\n",(unsigned)rank);
       }
-      if (!ack_out_of_phase && rank)
+      if (!ack_reverse_phase && rank)
       {
         rtimer_clock_t other_time = encounter_time - (2 * PHASE_OFFSET * (rank - 1));
         phase_update2(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
@@ -1104,12 +1103,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
         if (dag && dag->preferred_parent) {
           uip_ds6_get_addr_iid(&(dag->preferred_parent->addr),(uip_lladdr_t *)&rpl_parent_macaddr);
           if(rimeaddr_cmp(&rpl_parent_macaddr, packetbuf_addr(PACKETBUF_ADDR_RECEIVER))) {
-            if (!phase_is_in_multiphase(&phase_list, packetbuf_addr(PACKETBUF_ADDR_RECEIVER))) {
-              contikimac_set_phase_for_routing(&rpl_parent_macaddr,dag->instance->mc.distance_to_sink);
-            }
-            //else
-              //printf("contikimac_set_phase_for_routing skipped because of multiphase\n");
-            //printf("synchromac: Receiver is my RPL preferred parent, phase changed\n");
+            contikimac_set_phase_for_routing(&rpl_parent_macaddr,dag->instance->mc.distance_to_sink);
           }
         }
       }

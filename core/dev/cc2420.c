@@ -198,7 +198,7 @@ status(void)
 }
 /*---------------------------------------------------------------------------*/
 static uint8_t locked, lock_on, lock_off;
-static uint8_t ack_oop_on, ack_oop_off; // ack out of phase system
+static uint8_t ack_oop_pending, ack_oop_bitmask; // ack out of phase system
 
 static void
 on(void)
@@ -229,16 +229,15 @@ off(void)
   }
 }
 
-#define OUT_OF_PHASE_ACK (1 << 12)
+#define OUT_OF_PHASE_ACK1 (1 << 12)
+#define OUT_OF_PHASE_ACK2 (1 << 13)
 static unsigned getreg(enum cc2420_register regname);
 static void setreg(enum cc2420_register regname, unsigned value);
-static void cc2420_set_out_of_phase_ack_locked(int is_out_of_phase)
+static void cc2420_set_out_of_phase_ack_locked(uint8_t bitmask)
 {
   uint16_t reg = getreg(CC2420_MDMCTRL0);
-  if (is_out_of_phase)
-    reg |= OUT_OF_PHASE_ACK;
-  else
-    reg &= ~OUT_OF_PHASE_ACK;
+  reg &= ~(OUT_OF_PHASE_ACK1 | OUT_OF_PHASE_ACK2);
+  reg |= ((bitmask << 12) & (OUT_OF_PHASE_ACK1 | OUT_OF_PHASE_ACK2));
   setreg(CC2420_MDMCTRL0, reg);
 }
 /*---------------------------------------------------------------------------*/
@@ -254,15 +253,10 @@ static void RELEASE_LOCK(void) {
       lock_off = 0;
     }
     // out of phase ack subsystem
-    if (ack_oop_on)
+    if (ack_oop_pending)
     {
-      cc2420_set_out_of_phase_ack_locked(1);
-      ack_oop_on = 0;
-    }
-    if (ack_oop_off)
-    {
-      cc2420_set_out_of_phase_ack_locked(0);
-      ack_oop_off = 0;
+      cc2420_set_out_of_phase_ack_locked(ack_oop_bitmask);
+      ack_oop_pending = 0;
     }
   }
   locked--;
@@ -360,24 +354,25 @@ cc2420_init(void)
 
   flushrx();
 
-  ack_oop_on = 0;
-  ack_oop_off = 0;
+  ack_oop_pending = 0;
+  ack_oop_bitmask = 0;
   locked = 0;
 
   process_start(&cc2420_process, NULL);
   return 1;
 }
 /*---------------------------------------------------------------------------*/
-void cc2420_set_out_of_phase_ack(int is_out_of_phase)
+void cc2420_set_out_of_phase_ack(uint8_t bitmask)
 {
   if (locked)
   {
-    ack_oop_on = !!is_out_of_phase;
-    ack_oop_off = !is_out_of_phase;
+    ack_oop_bitmask = bitmask;
+    ack_oop_pending = 1;
     return;
   }
   GET_LOCK();
-  cc2420_set_out_of_phase_ack_locked(is_out_of_phase);
+  ack_oop_pending = 0;
+  cc2420_set_out_of_phase_ack_locked(bitmask);
   RELEASE_LOCK();
 }
 /*---------------------------------------------------------------------------*/

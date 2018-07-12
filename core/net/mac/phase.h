@@ -69,8 +69,6 @@ struct phase {
 #endif
   uint8_t noacks;
   struct timer noacks_timer;
-  uint8_t in_multiphase_state;
-  struct timer in_multiphase_state_expire;
 };
 
 struct phase_list {
@@ -98,8 +96,6 @@ void phase_update2(const struct phase_list *list, const rimeaddr_t *neighbor,
                   rtimer_clock_t time, rtimer_clock_t * time2, int mac_status);
 void phase_update(const struct phase_list *list, const rimeaddr_t *neighbor,
                   rtimer_clock_t time, int mac_status);
-void phase_set_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor, int expected_expire);
-int phase_is_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor);
 
 void phase_remove(const struct phase_list *list, const rimeaddr_t *neighbor);
 

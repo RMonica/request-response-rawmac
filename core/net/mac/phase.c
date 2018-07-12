@@ -121,7 +121,6 @@ init_single_phase(struct phase * e)
 #endif
   e->noacks = 0;
   e->cycle_time = UNKNOWN_CYCLE_TIME;
-  e->in_multiphase_state = 0;
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -163,9 +162,6 @@ phase_update2(const struct phase_list *list,
 
   /* If we have an entry for this neighbor already, we renew it. */
   e = find_neighbor(list, neighbor);
-  if (e != NULL && e->in_multiphase_state && !timer_expired(&e->in_multiphase_state_expire)) {
-    return; // do not update while in multiphase
-  }
 
   if(e != NULL) {
     if(mac_status == MAC_TX_OK) {
@@ -217,34 +213,6 @@ phase_update2(const struct phase_list *list,
 #if UIP_CONF_IPV6
   neighbor_info_other_source_metric_update(neighbor, 1); // notify change to RPL
 #endif /* UIP_CONF_IPV6 */
-}
-/*---------------------------------------------------------------------------*/
-void phase_set_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor, int expected_expire)
-{
-  struct phase *e;
-  e = find_neighbor(list, neighbor);
-  if(e == NULL) {
-    return;
-  }
-
-  e->in_multiphase_state = 1;
-  timer_set(&e->in_multiphase_state_expire, expected_expire);
-}
-/*---------------------------------------------------------------------------*/
-int phase_is_in_multiphase(struct phase_list *list, const rimeaddr_t *neighbor)
-{
-  struct phase *e;
-
-  e = find_neighbor(list, neighbor);
-  if (!e)
-    return 0;
-  if (!e->in_multiphase_state)
-    return 0;
-  if (timer_expired(&e->in_multiphase_state_expire)) {
-    e->in_multiphase_state = 0;
-    return 0;
-  }
-  return 1;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -432,10 +400,6 @@ phase_wait(struct phase_list *list,
   e = find_neighbor(list, neighbor);
   if(e != NULL && !e->cycle_time) {
     return PHASE_SEND_NOW;  // the node is always on
-  }
-
-  if (e != NULL && e->in_multiphase_state && !timer_expired(&e->in_multiphase_state_expire)) {
-    return PHASE_UNKNOWN;
   }
 
   if(e != NULL && (e->cycle_time != UNKNOWN_CYCLE_TIME) && (e->time < RTIMER_ARCH_SECOND)) {

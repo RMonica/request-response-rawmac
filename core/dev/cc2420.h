@@ -88,7 +88,7 @@ int cc2420_off(void);
 
 void cc2420_set_cca_threshold(int value);
 
-void cc2420_set_out_of_phase_ack(int is_out_of_phase);
+void cc2420_set_out_of_phase_ack(uint8_t bitmask);
 
 /************************************************************************/
 /* Additional SPI Macros for the CC2420 */

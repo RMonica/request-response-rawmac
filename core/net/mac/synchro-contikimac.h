@@ -48,8 +48,6 @@ extern const struct rdc_driver synchro_contikimac_driver;
 
 void synchro_contikimac_schedule_from_metric(unsigned int metric);
 void synchro_contikimac_unschedule_from_metric();
-void synchro_contikimac_set_in_multiphase(const rimeaddr_t *neighbor, int time);
-void synchro_contikimac_set_in_multiphase_once(const rimeaddr_t *neighbor);
 
 //void contikimac_set_phase(rimeaddr_t *);
 
