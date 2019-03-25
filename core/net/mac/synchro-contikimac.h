@@ -46,8 +46,8 @@
 
 extern const struct rdc_driver synchro_contikimac_driver;
 
-void synchro_contikimac_schedule_from_metric(unsigned int metric);
-void synchro_contikimac_unschedule_from_metric();
+void synchro_contikimac_schedule_from_metric(unsigned int metric, uint16_t addr);
+void synchro_contikimac_unschedule_from_metric(uint16_t addr);
 
 //void contikimac_set_phase(rimeaddr_t *);
 

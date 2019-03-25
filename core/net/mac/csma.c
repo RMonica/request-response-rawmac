@@ -199,6 +199,19 @@ packet_sent(void *ptr, int status, int num_transmissions)
   if(n == NULL) {
     return;
   }
+  /* // RMonica: uncomment to count collisions
+  switch(status) {
+    case MAC_TX_OK:
+      printf("TX_OK\n");
+      break;
+    case MAC_TX_NOACK:
+    case MAC_TX_COLLISION:
+      if (n->transmissions == 0 && n->collisions == 0)
+        printf("TX_COLL\n");
+      break;
+  }
+  */
+
   switch(status) {
   case MAC_TX_OK:
   case MAC_TX_NOACK:

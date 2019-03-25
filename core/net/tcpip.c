@@ -200,7 +200,7 @@ packet_input(void)
     MY_PRINTADDR(sender);
 #undef MY_PRINTADDR
     printf("\n");
-    synchro_contikimac_unschedule_from_metric();
+    synchro_contikimac_unschedule_from_metric(UIP_IP_BUF->srcipaddr.u8[sizeof(uip_ipaddr_t) - 1]);
   }
 
 #if UIP_CONF_IP_FORWARD
@@ -609,7 +609,7 @@ tcpip_ipv6_output(void)
         nexthop = &locrt->nexthop;
 /* ********************************** */
         if ((UIP_IP_BUF->tcflow & 0b00001100) == 0b00000100) { // a request and not a response
-          synchro_contikimac_schedule_from_metric(locrt->metric);
+          synchro_contikimac_schedule_from_metric(locrt->metric, UIP_IP_BUF->destipaddr.u8[sizeof(uip_ipaddr_t) - 1]);
         }
 /* ********************************** */
       }

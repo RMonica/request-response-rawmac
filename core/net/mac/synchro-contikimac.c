@@ -215,7 +215,7 @@ static int we_are_receiving_burst = 0;
 #endif
 
 #ifndef BOTH_RAWMAC_LADDERS
-#define BOTH_RAWMAC_LADDERS (1)
+#define BOTH_RAWMAC_LADDERS (0)
 #endif
 
 #define MULTIPHASE_ATTEMPTS (10)
@@ -409,17 +409,110 @@ powercycle_turn_radio_on(void)
   }
 }
 /*---------------------------------------------------------------------------*/
-static rtimer_clock_t multiphase_offset;
-static unsigned int multiphase_offsets_attempts;
-static unsigned int multiphase_offset_delay;
-static uint8_t multiphase_waiting_extra_offset;
-#define MAX_CYCLE_STARTS 3
-static rtimer_clock_t cycle_starts[MAX_CYCLE_STARTS];
-static uint8_t cycle_starts_num;
-static uint8_t cycle_starts_index;
+#define MAX_CYCLE_STARTS 5
+typedef struct
+{
+  rtimer_clock_t offset;
+  uint16_t addr;
+  uint8_t attempts; // if 0, will never be removed
+  uint8_t delay;
+} cycle_start_t;
+static cycle_start_t cycle_starts[MAX_CYCLE_STARTS];
+static uint8_t cycle_starts_size; // size of cycle_starts
+static uint8_t cycle_starts_current; // next wakeup index
 static uint8_t cycle_prev_rank;
+static uint8_t first_cycle_start;
+static uint8_t second_cycle_start;
+rtimer_clock_t next_cycle_start;
 volatile static uint8_t cycle_starts_mutex;
-static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsigned int delay, unsigned int attempts)
+static void swap_cycle_starts(cycle_start_t * a,cycle_start_t * b)
+{
+  cycle_start_t temp;
+  temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+static void reorder_cycle_starts(rtimer_clock_t current_time)
+{
+  uint8_t i,h;
+  for (i = 0; i < cycle_starts_size - 1; i++)
+    for (h = i + 1; h < cycle_starts_size; h++)
+      if (cycle_starts[i].offset > cycle_starts[h].offset)
+      {
+        swap_cycle_starts(&(cycle_starts[i]),&(cycle_starts[h]));
+
+        if (first_cycle_start == i)
+          first_cycle_start = h;
+        else if (first_cycle_start == h)
+          first_cycle_start = i;
+
+        if (second_cycle_start == i)
+          second_cycle_start = h;
+        else if (second_cycle_start == h)
+          second_cycle_start = i;
+      }
+
+  rtimer_clock_t current_time_offset = current_time % CYCLE_TIME;
+  cycle_starts_current = -1;
+  for (i = 0; i < cycle_starts_size; i++)
+    if (current_time_offset + CHECK_TIME * 4 < cycle_starts[i].offset)
+    {
+      cycle_starts_current = i;
+      break;
+    }
+  rtimer_clock_t addendum = 0;
+  if (cycle_starts_current == (uint8_t)(-1))
+  {
+    cycle_starts_current = 0;
+    addendum = CYCLE_TIME;
+  }
+  rtimer_clock_t maybe_next_wakeup = current_time - current_time_offset + addendum + cycle_starts[cycle_starts_current].offset;
+
+  //if (!cycle_starts[cycle_starts_current].delay &&
+  //    RTIMER_CLOCK_LT(current_time, maybe_next_wakeup) &&
+  //    RTIMER_CLOCK_LT(maybe_next_wakeup + GUARD_TIME, next_cycle_start))
+    schedule_powercycle_fixed_move(&rt, maybe_next_wakeup);
+}
+
+static void insert_new_cycle_start(rtimer_clock_t offset, uint8_t delay, uint8_t attempts, uint16_t addr,
+                                   rtimer_clock_t current_time)
+{
+  if (cycle_starts_size >= MAX_CYCLE_STARTS)
+    return;
+  cycle_starts[cycle_starts_size].addr = addr;
+  cycle_starts[cycle_starts_size].offset = offset;
+  cycle_starts[cycle_starts_size].delay = delay;
+  cycle_starts[cycle_starts_size].attempts = attempts;
+  //printf("Insert: %u, %u, %u, %u\n",(unsigned)addr,(unsigned)offset,(unsigned)delay,(unsigned)attempts,(unsigned)(current_time));
+  if (addr == 0 && attempts == 1)
+    second_cycle_start = cycle_starts_size;
+  cycle_starts_size++;
+  reorder_cycle_starts(current_time);
+}
+
+static void remove_cycle_start(rtimer_clock_t current_time, uint16_t addr)
+{
+  uint8_t i;
+  //printf("remove: %u\n",(unsigned)addr);
+  for (i = 0; i < cycle_starts_size; i++)
+    if (cycle_starts[i].addr == addr)
+    {
+      swap_cycle_starts(&(cycle_starts[i]),&(cycle_starts[cycle_starts_size - 1]));
+
+      if (first_cycle_start == cycle_starts_size - 1)
+        first_cycle_start = i;
+      if (second_cycle_start == cycle_starts_size - 1)
+        second_cycle_start = i;
+
+      cycle_starts_size--;
+      reorder_cycle_starts(current_time);
+      break;
+    }
+}
+
+static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, uint16_t addr,
+                                                     unsigned int delay, unsigned int attempts)
 {
   if (!attempts)
     return;
@@ -433,34 +526,16 @@ static void synchro_contikimac_set_multiphase_offset(rtimer_clock_t offset, unsi
 
   cycle_starts_mutex = 1;
 
-  multiphase_offset_delay = delay;
-  multiphase_offset = offset;
-  multiphase_offsets_attempts = attempts;
-
   rtimer_clock_t now = RTIMER_NOW();
-  uint8_t prev_index = (cycle_starts_index + cycle_starts_num - 1) % cycle_starts_num;
-  rtimer_clock_t next_cycle_start = cycle_starts[prev_index] + CYCLE_TIME;
 
-  if (!RTIMER_CLOCK_LT(now, cycle_starts[0] + PHASE_OFFSET))
-    multiphase_offset_delay++;
-
-  rtimer_clock_t maybe_next_wakeup = cycle_starts[0] + offset;
-  //printf("now: %u maybe_next_offset %u cycle_start %u\n", (unsigned int)now,
-  //       (unsigned int)maybe_next_wakeup, (unsigned int)next_cycle_start);
-  if (!multiphase_offset_delay && RTIMER_CLOCK_LT(now, maybe_next_wakeup) &&
-                                  RTIMER_CLOCK_LT(maybe_next_wakeup + GUARD_TIME, next_cycle_start))
-  {
-    schedule_powercycle_fixed_move(&rt, maybe_next_wakeup);
-    multiphase_waiting_extra_offset = 1;
-    cycle_starts[0] += multiphase_offset;
-    cycle_starts[0] -= CYCLE_TIME;
-  }
-  cycle_starts_index = 0;
+  offset += cycle_starts[first_cycle_start].offset;
+  offset = offset % CYCLE_TIME;
+  insert_new_cycle_start(offset, delay, attempts, addr, now);
 
   cycle_starts_mutex = 0;
 }
 
-void synchro_contikimac_schedule_from_metric(unsigned int metric)
+void synchro_contikimac_schedule_from_metric(unsigned int metric,uint16_t addr)
 {
   if (!metric)
     return;
@@ -468,12 +543,18 @@ void synchro_contikimac_schedule_from_metric(unsigned int metric)
   unsigned int cycle_offset = travel_delay / CYCLE_TIME;
   unsigned int offset = travel_delay % CYCLE_TIME;
   unsigned int attempts = MULTIPHASE_ATTEMPTS; // compute this from metric somehow?
-  synchro_contikimac_set_multiphase_offset(offset,cycle_offset,attempts);
+  synchro_contikimac_set_multiphase_offset(offset,addr,cycle_offset,attempts);
 }
 
-void synchro_contikimac_unschedule_from_metric()
+void synchro_contikimac_unschedule_from_metric(uint16_t addr)
 {
-  multiphase_offsets_attempts = 0;
+  if (cycle_starts_mutex)
+    return;
+
+  cycle_starts_mutex = 1;
+  rtimer_clock_t now = RTIMER_NOW();
+  remove_cycle_start(now, addr);
+  cycle_starts_mutex = 0;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -493,7 +574,7 @@ powercycle(struct rtimer *t, void *ptr)
   if (cycle_starts_mutex)
   {
     schedule_powercycle_fixed(t,RTIMER_NOW() + CCA_SLEEP_TIME);
-    return;
+    return 0;
   }
 
   PT_BEGIN(&pt);
@@ -509,79 +590,48 @@ powercycle(struct rtimer *t, void *ptr)
   cycle_start = RTIMER_NOW();
   PRINTF("contikimac: cycle_start initial %u\n", cycle_start);
 #endif
-  cycle_starts_index = 0;
-  cycle_starts_num = 1;
-  cycle_starts[0] = cycle_start;
-  cycle_starts[1] = cycle_start + CYCLE_TIME / 2;
+  cycle_starts_current = 0;
+  cycle_starts_size = 1;
+  cycle_starts[0].offset = cycle_start % CYCLE_TIME;
+  cycle_starts[0].addr = 0;
+  cycle_starts[0].attempts = 0;
+  cycle_starts[0].delay = 0;
+  first_cycle_start = 0;
+  second_cycle_start = -1;
   cycle_prev_rank = 0;
+  next_cycle_start = cycle_start;
+  cycle_start = CYCLE_TIME;
 
   while(1) {
     static uint8_t packet_seen;
     static rtimer_clock_t t0;
     static uint8_t count;
 
-    if (!multiphase_waiting_extra_offset && multiphase_offset_delay > 0) {
-      multiphase_offset_delay--;
+    if (cycle_starts[cycle_starts_current].addr)
+    {
+      if (cycle_starts[cycle_starts_current].delay > 0) {
+        cycle_starts[cycle_starts_current].delay--;
+      }
+      else if (cycle_starts[cycle_starts_current].attempts > 0) {
+        cycle_starts[cycle_starts_current].attempts--;
+      }
     }
 
-    if (!multiphase_waiting_extra_offset)
+    if (cycle_starts[cycle_starts_current].addr &&
+        cycle_starts[cycle_starts_current].delay == 0 &&
+        cycle_starts[cycle_starts_current].attempts == 0)
+      remove_cycle_start(RTIMER_NOW(), cycle_starts[cycle_starts_current].addr);
+    else
+      cycle_starts_current = (cycle_starts_current + 1) % cycle_starts_size;
+
+    if (RTIMER_CLOCK_LT(cycle_start + CYCLE_TIME, RTIMER_NOW()))
     {
-      if (multiphase_offsets_attempts > 0 && !multiphase_offset_delay)
-      {
-        cycle_starts[0] += multiphase_offset;
-        multiphase_waiting_extra_offset = 1;
-      }
-    }
-    else //if (multiphase_waiting_extra_offset)
-    {
-      cycle_starts[0] -= multiphase_offset;
-      if (multiphase_offsets_attempts) {
-        multiphase_offsets_attempts--;
-      }
-      multiphase_waiting_extra_offset = 0;
+      cycle_start += CYCLE_TIME;
     }
 
-    if (!multiphase_waiting_extra_offset)
+    if (cycle_starts_current == 0)
     {
-#if SYNC_CYCLE_STARTS
-#if PRECISE_SYNC_CYCLE_STARTS
-    /* Compute cycle start when RTIMER_ARCH_SECOND is not a multiple
-       of CHANNEL_CHECK_RATE */
-    if((++sync_cycle_phase) >= NETSTACK_RDC_CHANNEL_CHECK_RATE) {
-      sync_cycle_phase = 0;
-      sync_cycle_start += RTIMER_ARCH_SECOND;
-      cycle_start = sync_cycle_start;
-    } else {
-#if (RTIMER_ARCH_SECOND * NETSTACK_RDC_CHANNEL_CHECK_RATE) > 65535
-      cycle_start = sync_cycle_start + ((unsigned long)(sync_cycle_phase*RTIMER_ARCH_SECOND))/NETSTACK_RDC_CHANNEL_CHECK_RATE;
-#else
-      cycle_start = sync_cycle_start + (sync_cycle_phase*RTIMER_ARCH_SECOND)/NETSTACK_RDC_CHANNEL_CHECK_RATE;
-#endif
-    }
-#else  /* if !PRECISE_SYNC_CYCLE_STARTS */
-    if ((++sync_cycle_phase) >= CYCLE_RATE) {
-      sync_cycle_phase = 0;
-      }
-    /* for CYCLE_TIME_SYNC_TICKS times a second, we must add 1 more to cycle_start
-     * in this way, CYCLE_TIME_SYNC_TICKS + CYCLE_RATE * CYCLE_TIME = RTIMER_ARCH_SECOND
-     * and truncation error will be avoided */
-    cycle_start += (sync_cycle_phase < CYCLE_TIME_SYNC_TICKS) ? (CYCLE_TIME + 1) : CYCLE_TIME;
-#endif /* PRECISE_SYNC_CYCLE_STARTS */
-#else  /* if !SYNC_CYCLE_STARTS */
-    cycle_start += CYCLE_TIME;
-    cycle_starts[cycle_starts_index] += CYCLE_TIME;
-    if (!multiphase_offsets_attempts) {
-      cycle_starts_index++;
-      if (cycle_starts_index >= cycle_starts_num)
-        cycle_starts_index = 0;
-    }
-    else {
-      if (cycle_starts_num > 1) {
-        while (RTIMER_CLOCK_LT(cycle_starts[1],cycle_starts[0]))
-          cycle_starts[1] += CYCLE_TIME;
-      }
-    }
-#endif /* SYNC_CYCLE_STARTS */
+      cycle_start += CYCLE_TIME;
     }
 
     packet_seen = 0;
@@ -667,7 +717,8 @@ powercycle(struct rtimer *t, void *ptr)
     }
 
     //printf("now: %u, cs: %u, idx: %u\n",(unsigned)(RTIMER_NOW()),(unsigned)cycle_starts[cycle_starts_index],(unsigned)cycle_starts_index);
-    if(RTIMER_CLOCK_LT(RTIMER_NOW() - cycle_starts[cycle_starts_index], CYCLE_TIME - CHECK_TIME * 4)) {
+    //if(RTIMER_CLOCK_LT(RTIMER_NOW() - (base_cycle_start + cycle_starts[cycle_starts_current].offset), CYCLE_TIME - CHECK_TIME * 4)) {
+    if(RTIMER_CLOCK_LT(RTIMER_NOW() + CHECK_TIME * 4, cycle_start + cycle_starts[cycle_starts_current].offset)) {
       /* Schedule the next powercycle interrupt, or sleep the mcu
 	 until then.  Sleeping will not exit from this interrupt, so
 	 ensure an occasional wake cycle or foreground processing will
@@ -682,15 +733,16 @@ powercycle(struct rtimer *t, void *ptr)
         PT_YIELD(&pt);
       }
 #else
-      schedule_powercycle_fixed(t, CYCLE_TIME + cycle_starts[cycle_starts_index]);
+      next_cycle_start = cycle_start + cycle_starts[cycle_starts_current].offset;
+      schedule_powercycle_fixed(t, cycle_start + cycle_starts[cycle_starts_current].offset);
       //schedule_powercycle_fixed(t, RTIMER_NOW() + CYCLE_TIME);
       PT_YIELD(&pt);
 #endif
     }
 
-    if (!multiphase_waiting_extra_offset)
+    if (cycle_starts[cycle_starts_current].addr == 0)
     {
-      if (cycle_starts_index)
+      if (cycle_starts[cycle_starts_current].attempts)
         cc2420_set_out_of_phase_ack(0b01);
       else
         cc2420_set_out_of_phase_ack(0b00);
@@ -1249,12 +1301,12 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr,uint8_t rank)
 		//PRINTF("contikimac: (cycle_offset - cycle_start) mod CYCLE_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME);
 		//PRINTF("contikimac: (cycle_start - cycle_offset) mod CYCLE_TIME %u\n", (cycle_start - cycle_offset) % CYCLE_TIME);
 #if OPTIMIZE_TO_SINK
-    if((cycle_offset - (cycle_starts[0] % CYCLE_TIME) + CYCLE_TIME) % CYCLE_TIME < (PHASE_OFFSET - GUARD_TIME/2) ||
-       (cycle_offset - (cycle_starts[0] % CYCLE_TIME) + CYCLE_TIME) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME/2) ||
+    if((cycle_offset - cycle_starts[first_cycle_start].offset + CYCLE_TIME) % CYCLE_TIME < (PHASE_OFFSET - GUARD_TIME/2) ||
+       (cycle_offset - cycle_starts[first_cycle_start].offset + CYCLE_TIME) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME/2) ||
        rank != cycle_prev_rank) {
 #else
-    if(((cycle_starts[0] % CYCLE_TIME) + CYCLE_TIME - cycle_offset) % CYCLE_TIME < (PHASE_OFFSET - GUARD_TIME/2) ||
-       ((cycle_starts[0] % CYCLE_TIME) + CYCLE_TIME - cycle_offset) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME/2) ||
+    if((cycle_starts[first_cycle_start].offset + CYCLE_TIME - cycle_offset) % CYCLE_TIME < (PHASE_OFFSET - GUARD_TIME/2) ||
+       (cycle_starts[first_cycle_start].offset + CYCLE_TIME - cycle_offset) % CYCLE_TIME > (PHASE_OFFSET + GUARD_TIME/2) ||
        rank != cycle_prev_rank) {
 #endif
 			//printf("(cycle_offset - cycle_start) mod CYCLE_TIME = %u, 2*GUARD_TIME = %u, CCA_SLEEP_TIME %u\n", (cycle_offset - cycle_start) % CYCLE_TIME, 2*GUARD_TIME, CCA_SLEEP_TIME);
@@ -1262,24 +1314,30 @@ contikimac_set_phase_for_routing(rimeaddr_t * addr,uint8_t rank)
       cycle_prev_rank = rank;
       rtimer_clock_t cycle_phase_offset = (2 * PHASE_OFFSET * rank) % CYCLE_TIME;
 			powercycle_turn_radio_off();
+      rtimer_clock_t second_offset;
 #if OPTIMIZE_TO_SINK
-      cycle_starts[0] = (CYCLE_TIME + cycle_offset - PHASE_OFFSET) % CYCLE_TIME;
-      cycle_starts[1] = (cycle_starts[0] + PHASE_OFFSET) % CYCLE_TIME;
+      cycle_starts[first_cycle_start].offset = (CYCLE_TIME + cycle_offset - PHASE_OFFSET) % CYCLE_TIME;
+      second_offset = (cycle_starts[first_cycle_start].offset + PHASE_OFFSET) % CYCLE_TIME;
 #else
-      cycle_starts[0] = (cycle_offset + PHASE_OFFSET) % CYCLE_TIME;
-      cycle_starts[1] = (cycle_starts[0] + CYCLE_TIME - cycle_phase_offset) % CYCLE_TIME;
+      cycle_starts[first_cycle_start].offset = (cycle_offset + PHASE_OFFSET) % CYCLE_TIME;
+      second_offset =
+        (cycle_starts[first_cycle_start].offset + CYCLE_TIME - cycle_phase_offset) % CYCLE_TIME;
 #endif
-      while (RTIMER_CLOCK_LT(cycle_starts[1],cycle_starts[0]))
-        cycle_starts[1] += CYCLE_TIME;
       //printf("rank: %u, cycle_phase_offset: %u, cycle start 0: %u, cycle start 1: %u, cycle_start_index: %u\n",
       //       (unsigned)rank,(unsigned)cycle_phase_offset,(unsigned)(cycle_starts[0]),(unsigned)(cycle_starts[1]),
       //       (unsigned)cycle_starts_index);
 #if BOTH_RAWMAC_LADDERS
-      cycle_starts_num = 2;
-#else
-      cycle_starts_num = 1;
+      rtimer_clock_t now = RTIMER_NOW();
+      if (second_cycle_start == (uint8_t)(-1))
+      {
+        insert_new_cycle_start(second_offset, 0, 1, 0, now);
+      }
+      else
+      {
+        cycle_starts[second_cycle_start].offset = second_offset;
+        reorder_cycle_starts(now);
+      }
 #endif
-      cycle_starts_index = 0;
 			//powercycle_turn_radio_on();
 		}
   }
@@ -1391,10 +1449,6 @@ init(void)
              (void (*)(struct rtimer *, void *))powercycle, NULL);
 
   contikimac_is_on = 1;
-
-  multiphase_offsets_attempts = 0;
-  multiphase_waiting_extra_offset = 0;
-  multiphase_offset_delay = 0;
 
 #if WITH_PHASE_OPTIMIZATION
   phase_init(&phase_list);
